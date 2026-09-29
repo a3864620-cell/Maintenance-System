@@ -10,7 +10,7 @@
 <script>
 /* 版本號:每次改完 index.html 上傳到 GitHub 前,把這個改成新的(例如日期加序號),
    手機打開時發現 GitHub 上的版本號不一樣,就會出現「點這裡更新」 */
-var APP_VERSION = "2026-09-29.3";
+var APP_VERSION = "2026-09-29.4";
 /* 放在 GitHub 等外部網站時,API 網址填這裡(Apps Script 部署後的 /exec 網址) */
 var API_URL = "https://script.google.com/macros/s/AKfycbzB-Ry74ubI9b-B3zg_uWy39OaMzKjkWGeeDC3huIC3dyMDHjwsIE9tDDi0fjYIpZSrpA/exec";
 /* 網頁一打開就先去抓資料,跟下載 React 同時進行,不用等畫面程式載完才開始抓 */
@@ -64,6 +64,16 @@ if (window.__BOOT__) window.__BOOT__.catch(function () {});
   }
   .top-bar-title { font-size: 18px; font-weight: 700; }
   .top-bar-actions { display: flex; gap: 6px; align-items: center; }
+  .sync-line {
+    display: flex; justify-content: space-between; gap: 8px; padding: 0 16px 8px;
+    font-size: 12px; color: var(--muted);
+  }
+  .sync-line button { background: none; border: none; padding: 0; color: var(--accent); font-size: 12px; cursor: pointer; }
+  .sync-warn {
+    margin: 0 16px 10px; padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.5;
+    background: var(--warning-bg); border: 1px solid var(--warning); color: #7a5200;
+  }
+  .sync-warn-reason { font-size: 12px; margin: 2px 0 8px; word-break: break-all; }
   .update-banner {
     margin: 0 16px 8px; padding: 10px 12px; border-radius: 8px; border: none; width: calc(100% - 32px);
     background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
@@ -443,6 +453,16 @@ function checkForUpdate_() {
     })
     .catch(function () { return false; });
 }
+/** 資料時間:今天的只顯示時:分,不是今天的加上月/日 */
+function fmtSyncTime_(ms) {
+  if (!ms) return "先前存的";
+  var d = new Date(ms), now = new Date();
+  var two = function (n) { return (n < 10 ? "0" : "") + n; };
+  var hm = two(d.getHours()) + ":" + two(d.getMinutes());
+  return d.toDateString() === now.toDateString() ? hm : (d.getMonth() + 1) + "/" + d.getDate() + " " + hm;
+}
+var AUTO_REFRESH_MS = 3 * 60 * 1000;   // App 開著時,每 3 分鐘自動抓一次最新資料
+
 function forceUpdate_() {
   // 網址後面加上時間,手機就不會拿舊的存檔,一定去 GitHub 抓新的
   location.replace(location.pathname + "?v=" + Date.now());
@@ -1210,6 +1230,32 @@ function App() {
   var pendSeq = React.useRef(0);
   var reloadSeq = React.useRef(0);
   var refreshTimer = React.useRef(null);
+  // 資料同步狀態:最後一次成功從伺服器拿到資料的時間、失敗原因、是否正在抓
+  var _syncedAt = React.useState(0), syncedAt = _syncedAt[0], setSyncedAt = _syncedAt[1];
+  var _syncError = React.useState(""), syncError = _syncError[0], setSyncError = _syncError[1];
+  var _syncing = React.useState(false), syncing = _syncing[0], setSyncing = _syncing[1];
+  var inFlight = React.useRef(0);
+  var dataRef = React.useRef(null);
+  dataRef.current = data;
+  var reloadRef = React.useRef(null);
+  reloadRef.current = reload;
+  // 自動更新:從背景切回 App(離開超過 30 秒)時馬上抓一次,開著的時候每 3 分鐘抓一次
+  React.useEffect(function () {
+    var hiddenAt = 0;
+    function refreshNow() {
+      if (document.visibilityState !== "visible") return;
+      if (needsLogin_() || inFlight.current > 0 || !dataRef.current) return;
+      reloadRef.current();
+    }
+    var timer = setInterval(refreshNow, AUTO_REFRESH_MS);
+    function onVis() {
+      if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+      if (hiddenAt && Date.now() - hiddenAt > 30000) refreshNow();
+      hiddenAt = 0;
+    }
+    document.addEventListener("visibilitychange", onVis);
+    return function () { clearInterval(timer); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
   var _updateReady = React.useState(false), updateReady = _updateReady[0], setUpdateReady = _updateReady[1];
   React.useEffect(function () {
     function check() { checkForUpdate_().then(function (yes) { if (yes) setUpdateReady(true); }); }
@@ -1261,43 +1307,62 @@ function App() {
     });
   }
 
-  // useCache 只在剛開啟網頁那一次用:先秀上次的資料讓畫面馬上出來,同時在背景抓最新的換上去
+  // useCache 只在剛開啟網頁那一次用:先秀上次存在這台裝置的資料讓畫面馬上出來,同時在背景抓最新的換上去
   function reload(useCache) {
     var cached = useCache === true ? readCache_() : null;
-    if (cached) { setData(cached); setLoading(false); } else if (!data) { setLoading(true); }
+    if (cached) { setData(cached); setLoading(false); setSyncedAt(cached._syncedAt || 0); }
+    else if (!dataRef.current) { setLoading(true); }
     var req = useCache === true ? takeEarlyBoot_() : gsRun("getBootstrap");
     reloadSeq.current += 1;
     var mySeq = reloadSeq.current;
+    inFlight.current += 1;
+    setSyncing(true);
+    function finished() {
+      inFlight.current = Math.max(0, inFlight.current - 1);
+      if (!inFlight.current) setSyncing(false);
+    }
     req.then(function (d) {
-      if (mySeq !== reloadSeq.current) return;   // 已經有更新的一次在抓了,這個舊的結果就不用了
+      finished();
+      if (mySeq !== reloadSeq.current) return;   // 這次抓完之前畫面上又有新的修改,舊的結果就不用了
+      var now = Date.now();
       setData(function (prev) {
-        var next = d;
+        var next = Object.assign({}, d, { _syncedAt: now });
         // 這次伺服器沒附零件/抄表清單的話,先沿用手上舊的,等背景補上再換
         if (d.lookupsPending && prev) {
-          next = Object.assign({}, d, { parts: prev.parts || [], meterCustomers: prev.meterCustomers || [] });
+          next.parts = prev.parts || [];
+          next.meterCustomers = prev.meterCustomers || [];
         }
         writeCache_(next);
         return next;
       });
+      setSyncedAt(now);
+      setSyncError("");
       setLoading(false);
       setFresh(true);
       if (d.lookupsPending) loadLookups();
     }).catch(function (e) {
+      finished();
+      if (mySeq !== reloadSeq.current) return;
       if (e && e.code === "AUTH") {
         // 密碼錯誤或被改掉了:清掉記住的密碼跟快取,回到登入畫面
         setPw_("");
         clearCache_();
         setData(null);
+        setSyncedAt(0);
+        setSyncError("");
         setLoginMsg(e.message || "密碼錯誤");
         setNeedLogin(true);
         setLoading(false);
         return;
       }
-      if (cached) {
-        showToast("更新失敗,目前顯示的是上次的資料:" + (e.message || ""), "warning");
+      if (cached || dataRef.current) {
+        // 畫面上已經有資料:不要整頁變成錯誤畫面,改成上方一直掛著的提醒,
+        // 讓人知道現在看到的是舊資料、以及抓不到新資料的原因
+        setSyncError((e && e.message) || "載入失敗");
+        setLoading(false);
         return;
       }
-      setErr(e.message || "載入失敗");
+      setErr((e && e.message) || "載入失敗");
       setLoading(false);
     });
   }
@@ -1317,6 +1382,8 @@ function App() {
     setPw_("");
     clearCache_();
     setData(null);
+    setSyncedAt(0);
+    setSyncError("");
     setLoginMsg("");
     setNeedLogin(true);
   }
@@ -1404,6 +1471,7 @@ function App() {
   }
   // 把一張單直接放進(或更新)畫面上的列表,不用等整份資料重新下載
   function upsertTicket(t) {
+    reloadSeq.current += 1;   // 之前發出、還沒回來的同步結果比這次修改舊,回來時不要拿來蓋掉
     setData(function (prev) {
       if (!prev) return prev;
       var others = prev.tickets.filter(function (x) { return String(x.ticketId) !== String(t.ticketId); });
@@ -1426,6 +1494,7 @@ function App() {
     list.forEach(function (ph) {
       photoChain.current = photoChain.current.then(function () {
         return gsRun("uploadTicketPhoto", { ticketId: ticketId, dataUrl: ph.dataUrl, fileName: ph.name }).then(function (all) {
+          reloadSeq.current += 1;
           setData(function (prev) {
             if (!prev) return prev;
             var next = Object.assign({}, prev, { tickets: prev.tickets.map(function (t) {
@@ -1442,6 +1511,7 @@ function App() {
     photoChain.current = photoChain.current.then(function () {
       if (failed) showToast("#" + ticketId + " 有 " + failed + " 張照片沒上傳成功,請打開這張單再補傳", "error");
       else showToast("#" + ticketId + " 照片已上傳(" + list.length + " 張)", "success");
+      scheduleRefresh();
     });
   }
 
@@ -1465,6 +1535,7 @@ function App() {
   function backToTicketList(saved) {
     if (saved && saved.ticketId) upsertTicket(saved);   // 改好的內容馬上顯示,背景再同步
     if (saved && saved.deletedId) {
+      reloadSeq.current += 1;
       setData(function (prev) {
         if (!prev) return prev;
         var next = Object.assign({}, prev, { tickets: prev.tickets.filter(function (x) { return String(x.ticketId) !== String(saved.deletedId); }) });
@@ -1512,6 +1583,17 @@ function App() {
       ) : null
     ),
     updateReady ? h("button", { className: "update-banner", onClick: doUpdate }, "🔄 有新版本,點這裡更新") : null,
+    syncError ? h("div", { className: "sync-warn" },
+      h("div", { style: { fontWeight: 700 } }, "⚠️ 抓不到最新資料,現在看到的是 " + fmtSyncTime_(syncedAt) + " 的資料"),
+      h("div", { className: "sync-warn-reason" }, "原因:" + syncError),
+      h("button", { className: "btn btn-primary", disabled: syncing, onClick: function () { reload(); } }, syncing ? "重試中…" : "重試")
+    ) : null,
+    h("div", { className: "sync-line" },
+      syncing
+        ? h("span", null, "資料更新中…")
+        : h("button", { type: "button", onClick: function () { reload(); }, title: "點一下重新抓最新資料" }, "資料時間 " + fmtSyncTime_(syncedAt) + " ↻"),
+      h("span", null, "版本 " + APP_VERSION)
+    ),
     h("div", { className: "tab-bar" },
       h("button", { className: "tab-btn" + (tab === "tickets" ? " active" : ""), onClick: function () { setTab("tickets"); setPage("list"); } }, "叫修列表"),
       h("button", { className: "tab-btn" + (tab === "reports" ? " active" : ""), onClick: function () { setTab("reports"); setPage("list"); } }, "統計報表"),
