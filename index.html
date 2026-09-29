@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <script>
+/* 版本號:每次改完 index.html 上傳到 GitHub 前,把這個改成新的(例如日期加序號),
+   手機打開時發現 GitHub 上的版本號不一樣,就會出現「點這裡更新」 */
+var APP_VERSION = "2026-09-29.3";
 /* 放在 GitHub 等外部網站時,API 網址填這裡(Apps Script 部署後的 /exec 網址) */
 var API_URL = "https://script.google.com/macros/s/AKfycbzB-Ry74ubI9b-B3zg_uWy39OaMzKjkWGeeDC3huIC3dyMDHjwsIE9tDDi0fjYIpZSrpA/exec";
 /* 網頁一打開就先去抓資料,跟下載 React 同時進行,不用等畫面程式載完才開始抓 */
@@ -60,6 +63,11 @@ if (window.__BOOT__) window.__BOOT__.catch(function () {});
     padding: 14px 16px 8px; gap: 8px;
   }
   .top-bar-title { font-size: 18px; font-weight: 700; }
+  .top-bar-actions { display: flex; gap: 6px; align-items: center; }
+  .update-banner {
+    margin: 0 16px 8px; padding: 10px 12px; border-radius: 8px; border: none; width: calc(100% - 32px);
+    background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
+  }
   .operator-select {
     font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface-1); color: var(--text-primary); max-width: 40%;
@@ -416,6 +424,28 @@ function writeCache_(d) {
 }
 function clearCache_() {
   try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+}
+
+/* ============================================================
+ * 版本更新
+ * 手機瀏覽器會把網頁存起來,GitHub 上換了新檔案,手機可能還是開到舊的。
+ * 打開 App、或從背景切回來時,去 GitHub 抓一次最新的 index.html 比對版本號,
+ * 不一樣就在畫面上方出現「點這裡更新」。
+ * ============================================================ */
+function checkForUpdate_() {
+  if (inAppsScript_() || !window.fetch) return Promise.resolve(false);
+  var re = new RegExp("var APP_" + "VERSION = \"([^\"]+)\"");
+  return fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })
+    .then(function (r) { return r.ok ? r.text() : ""; })
+    .then(function (t) {
+      var m = t.match(re);
+      return !!(m && m[1] && m[1] !== APP_VERSION);
+    })
+    .catch(function () { return false; });
+}
+function forceUpdate_() {
+  // 網址後面加上時間,手機就不會拿舊的存檔,一定去 GitHub 抓新的
+  location.replace(location.pathname + "?v=" + Date.now());
 }
 
 function unwrapApi_(p) {
@@ -1180,6 +1210,14 @@ function App() {
   var pendSeq = React.useRef(0);
   var reloadSeq = React.useRef(0);
   var refreshTimer = React.useRef(null);
+  var _updateReady = React.useState(false), updateReady = _updateReady[0], setUpdateReady = _updateReady[1];
+  React.useEffect(function () {
+    function check() { checkForUpdate_().then(function (yes) { if (yes) setUpdateReady(true); }); }
+    check();
+    function onVisible() { if (document.visibilityState === "visible") check(); }
+    document.addEventListener("visibilitychange", onVisible);
+    return function () { document.removeEventListener("visibilitychange", onVisible); };
+  }, []);
   var photoChain = React.useRef(Promise.resolve());
   var _photoJobs = React.useState(0), photoJobs = _photoJobs[0], setPhotoJobs = _photoJobs[1]; // 背景上傳中的照片張數
 
@@ -1269,6 +1307,11 @@ function App() {
     setLoginMsg("");
     setNeedLogin(false);
     reload();
+  }
+  function doUpdate() {
+    var busy = photoJobs > 0 || pendingNew.some(function (p) { return p.state === "saving"; });
+    if (busy) { showToast("還有單子或照片在背景儲存,等存完再更新", "warning"); return; }
+    forceUpdate_();
   }
   function doLogout() {
     setPw_("");
@@ -1463,8 +1506,12 @@ function App() {
   return h("div", { className: "app-shell" },
     h("div", { className: "top-bar" },
       h("div", { className: "top-bar-title" }, "叫修系統"),
-      !inAppsScript_() ? h("button", { className: "btn-ghost", onClick: doLogout }, "登出") : null
+      !inAppsScript_() ? h("div", { className: "top-bar-actions" },
+        h("button", { className: "btn-ghost", onClick: doUpdate, title: "重新載入最新版本" }, "⟳ 更新"),
+        h("button", { className: "btn-ghost", onClick: doLogout }, "登出")
+      ) : null
     ),
+    updateReady ? h("button", { className: "update-banner", onClick: doUpdate }, "🔄 有新版本,點這裡更新") : null,
     h("div", { className: "tab-bar" },
       h("button", { className: "tab-btn" + (tab === "tickets" ? " active" : ""), onClick: function () { setTab("tickets"); setPage("list"); } }, "叫修列表"),
       h("button", { className: "tab-btn" + (tab === "reports" ? " active" : ""), onClick: function () { setTab("reports"); setPage("list"); } }, "統計報表"),
