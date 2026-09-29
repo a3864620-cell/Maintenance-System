@@ -1,1260 +1,1254 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>炒飯記帳本</title>
-
-<meta name="theme-color" content="#2A1810">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="炒飯記帳">
-<link rel="icon" type="image/svg+xml" href="icon.svg">
-<link rel="apple-touch-icon" href="icon.svg">
-<link rel="manifest" href="manifest.json">
-
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700;900&family=Noto+Sans+TC:wght@400;500;700;900&family=Zen+Kurenaido&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>叫修系統</title>
+<style id="print-page-style"></style>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
   :root {
-    --bg-cream: #FFF8E7;
-    --bg-paper: #FBF3D9;
-    --ink-dark: #2A1810;
-    --ink-medium: #5C3A21;
-    --red-stamp: #C8362C;
-    --red-deep: #8B1A1A;
-    --gold: #D4A24C;
-    --gold-deep: #A67C2D;
-    --green-fresh: #5C8A3A;
-    --green-deep: #3D5F26;
-    --cat-food: #5C8A3A;
-    --cat-utility: #3B82A8;
-    --cat-rent: #8B5CF6;
-    --cat-equip: #D97706;
-    --cat-misc: #6B7280;
-    --shadow-soft: rgba(42, 24, 16, 0.12);
-    --shadow-strong: rgba(42, 24, 16, 0.25);
+    --surface-1: #fcfcfb;
+    --page-plane: #f5f5f3;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --gridline: #e1e0d9;
+    --border: rgba(11,11,11,0.10);
+    --accent: #2a78d6;
+    --accent-dark: #184f95;
+    --good: #0ca30c;
+    --good-bg: #e7f6e7;
+    --warning: #fab219;
+    --warning-bg: #fff6e0;
+    --critical: #d03b3b;
+    --critical-bg: #fbe9e9;
   }
-
-  html, body {
-    background: var(--bg-cream);
-    color: var(--ink-dark);
-    font-family: 'Noto Sans TC', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-    -webkit-user-select: none;
-    user-select: none;
-    -webkit-touch-callout: none;
-  }
-
-  input, select, textarea {
-    -webkit-user-select: auto;
-    user-select: auto;
-  }
-
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      radial-gradient(circle at 20% 30%, rgba(212, 162, 76, 0.08) 0%, transparent 50%),
-      radial-gradient(circle at 80% 70%, rgba(200, 54, 44, 0.06) 0%, transparent 50%),
-      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 24px 20px 80px;
-    position: relative;
-    z-index: 1;
-  }
-
-  /* === 同步狀態列 === */
-  .sync-bar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    background: var(--ink-dark);
-    color: var(--gold);
-    padding: 6px 16px;
-    font-size: 12px;
-    font-family: 'Noto Sans TC';
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    letter-spacing: 0.05em;
-    box-shadow: 0 2px 4px var(--shadow-soft);
-    transition: all 0.3s;
-  }
-  .sync-bar.success { background: var(--green-deep); color: white; }
-  .sync-bar.syncing { background: var(--gold-deep); color: white; }
-  .sync-bar.error { background: var(--red-deep); color: white; }
-  .sync-bar.offline { background: #444; color: #ccc; }
-
-  .sync-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: currentColor;
-  }
-  .sync-bar.syncing .sync-dot {
-    animation: pulse 1s infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
-
-  body { padding-top: 30px; }
-
-  /* === 頁首 === */
-  header {
-    text-align: center;
-    padding: 32px 20px 40px;
-    position: relative;
-  }
-
-  .header-banner {
-    display: inline-block;
-    position: relative;
-    padding: 16px 48px;
-  }
-
-  .header-banner::before,
-  .header-banner::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    width: 60px;
-    height: 2px;
-    background: var(--ink-medium);
-  }
-  .header-banner::before { left: -50px; }
-  .header-banner::after { right: -50px; }
-
-  h1 {
-    font-family: 'Noto Serif TC', serif;
-    font-weight: 900;
-    font-size: clamp(28px, 5vw, 44px);
-    color: var(--red-stamp);
-    letter-spacing: 0.15em;
-    line-height: 1.2;
-    text-shadow: 2px 2px 0 var(--bg-cream), 4px 4px 0 var(--shadow-soft);
-  }
-
-  .subtitle {
-    font-family: 'Zen Kurenaido', cursive;
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page-plane);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
     font-size: 16px;
-    color: var(--ink-medium);
-    margin-top: 8px;
-    letter-spacing: 0.3em;
+    line-height: 1.45;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #root { min-height: 100vh; }
+
+  .app-shell { display: flex; flex-direction: column; min-height: 100vh; max-width: 640px; margin: 0 auto; background: var(--page-plane); }
+
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px 8px; gap: 8px;
+  }
+  .top-bar-title { font-size: 18px; font-weight: 700; }
+  .operator-select {
+    font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); max-width: 40%;
   }
 
-  .stamp {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 80px;
-    height: 80px;
-    background: var(--red-stamp);
-    color: var(--bg-cream);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Noto Serif TC', serif;
-    font-weight: 900;
-    font-size: 14px;
-    line-height: 1.1;
-    text-align: center;
-    transform: rotate(-8deg);
-    border: 3px double var(--bg-cream);
-    box-shadow: 0 0 0 3px var(--red-stamp), 4px 4px 12px var(--shadow-strong);
-    letter-spacing: 0.1em;
+  .tab-bar {
+    display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 16px 12px;
   }
-
-  /* === 分頁切換 === */
-  .tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 24px;
-    border-bottom: 3px solid var(--ink-dark);
-    flex-wrap: wrap;
+  .tab-btn {
+    flex: 0 0 auto; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-secondary); font-size: 14px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
   }
+  .tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-  .tab {
-    background: var(--bg-paper);
-    border: 2px solid var(--ink-dark);
-    border-bottom: none;
-    padding: 12px 20px;
-    font-family: 'Noto Serif TC', serif;
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--ink-medium);
-    cursor: pointer;
-    border-radius: 8px 8px 0 0;
-    transition: all 0.2s;
-    margin-bottom: -3px;
-    letter-spacing: 0.1em;
+  .main-content { flex: 1; padding: 4px 16px 40px; }
+
+  .page-title { font-size: 20px; font-weight: 700; margin: 4px 0 14px; }
+  .page-hint { color: var(--text-secondary); font-size: 13px; margin: -6px 0 14px; }
+  .section-title { font-size: 14px; font-weight: 700; color: var(--text-secondary); margin: 22px 0 8px; }
+
+  .field-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 14px 0 6px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .input {
+    width: 100%; padding: 11px 12px; font-size: 16px; border-radius: 10px;
+    border: 1px solid var(--gridline); background: var(--surface-1); color: var(--text-primary);
   }
+  .input:focus { outline: none; border-color: var(--accent); }
+  textarea.input { resize: vertical; font-family: inherit; }
 
-  .tab:hover { background: #F5E5C0; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 14px 0; font-size: 14px; color: var(--text-primary); }
+  .checkbox-row input { width: 18px; height: 18px; }
 
-  .tab.active {
-    background: var(--ink-dark);
-    color: var(--gold);
-    border-color: var(--ink-dark);
-  }
-
-  /* === 卡片 === */
-  .card {
-    background: var(--bg-paper);
-    border: 2px solid var(--ink-dark);
-    border-radius: 4px;
-    padding: 24px;
-    margin-bottom: 20px;
-    box-shadow: 4px 4px 0 var(--ink-dark), 8px 8px 16px var(--shadow-soft);
-    position: relative;
-  }
-
-  .card-title {
-    font-family: 'Noto Serif TC', serif;
-    font-weight: 700;
-    font-size: 18px;
-    color: var(--ink-dark);
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 2px dashed var(--gold-deep);
-    letter-spacing: 0.1em;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .card-title::before {
-    content: '◆';
-    color: var(--red-stamp);
-    font-size: 14px;
-  }
-
-  /* === 月份統計卡片 === */
-  .summary-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-
-  .summary-card {
-    background: var(--bg-paper);
-    border: 2px solid var(--ink-dark);
-    border-radius: 4px;
-    padding: 20px;
-    box-shadow: 4px 4px 0 var(--ink-dark);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .summary-card.income { background: linear-gradient(135deg, #FBF3D9 0%, #F0E0B8 100%); }
-  .summary-card.cost { background: linear-gradient(135deg, #FBF3D9 0%, #F5D6C8 100%); }
-  .summary-card.profit { background: linear-gradient(135deg, #FBF3D9 0%, #DCE8C8 100%); }
-
-  .summary-label {
-    font-family: 'Noto Serif TC', serif;
-    font-size: 14px;
-    color: var(--ink-medium);
-    letter-spacing: 0.2em;
-    margin-bottom: 8px;
-  }
-
-  .summary-value {
-    font-family: 'Noto Serif TC', serif;
-    font-weight: 900;
-    font-size: 36px;
-    color: var(--ink-dark);
-    line-height: 1;
-  }
-
-  .summary-card.income .summary-value { color: var(--gold-deep); }
-  .summary-card.cost .summary-value { color: var(--red-stamp); }
-  .summary-card.profit .summary-value { color: var(--green-deep); }
-
-  .summary-value::before {
-    content: 'NT$ ';
-    font-size: 20px;
-    font-weight: 500;
-    margin-right: 4px;
-  }
-
-  .summary-sub {
-    font-size: 12px;
-    color: var(--ink-medium);
-    margin-top: 6px;
-    font-family: 'Zen Kurenaido', cursive;
-    letter-spacing: 0.1em;
-  }
-
-  /* === 月份選擇器 === */
-  .month-picker {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    margin-bottom: 24px;
-    background: var(--bg-paper);
-    padding: 16px;
-    border: 2px solid var(--ink-dark);
-    border-radius: 4px;
-    box-shadow: 4px 4px 0 var(--ink-dark);
-  }
-
-  .month-picker button {
-    background: var(--ink-dark);
-    color: var(--gold);
-    border: none;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 18px;
-    font-weight: 700;
-    transition: transform 0.15s;
-  }
-
-  .month-picker button:hover { transform: scale(1.1); }
-  .month-picker button:active { transform: scale(0.95); }
-
-  .month-display {
-    font-family: 'Noto Serif TC', serif;
-    font-weight: 700;
-    font-size: 22px;
-    color: var(--ink-dark);
-    letter-spacing: 0.1em;
-    min-width: 200px;
-    text-align: center;
-  }
-
-  /* === 表單 === */
-  .form-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 14px;
-    margin-bottom: 16px;
-  }
-
-  .form-group { display: flex; flex-direction: column; gap: 6px; }
-
-  .form-group label {
-    font-family: 'Noto Serif TC', serif;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--ink-medium);
-    letter-spacing: 0.1em;
-  }
-
-  input, select, textarea {
-    background: var(--bg-cream);
-    border: 2px solid var(--ink-medium);
-    padding: 10px 12px;
-    font-family: 'Noto Sans TC', sans-serif;
-    font-size: 15px;
-    color: var(--ink-dark);
-    border-radius: 2px;
-    transition: all 0.15s;
-    width: 100%;
-  }
-
-  input:focus, select:focus, textarea:focus {
-    outline: none;
-    border-color: var(--red-stamp);
-    box-shadow: 0 0 0 3px rgba(200, 54, 44, 0.15);
-  }
-
-  /* === 按鈕 === */
   .btn {
-    background: var(--ink-dark);
-    color: var(--gold);
-    border: none;
-    padding: 12px 24px;
-    font-family: 'Noto Serif TC', serif;
-    font-size: 15px;
-    font-weight: 700;
+    display: inline-block; padding: 12px 18px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); font-size: 15px; font-weight: 700;
     cursor: pointer;
-    border-radius: 2px;
-    letter-spacing: 0.15em;
-    transition: all 0.15s;
-    box-shadow: 3px 3px 0 var(--gold-deep);
+  }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:disabled { opacity: 0.6; }
+  .btn-block { display: block; width: 100%; margin-top: 18px; text-align: center; }
+  .btn-ghost {
+    padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: transparent;
+    color: var(--text-secondary); font-size: 13px; cursor: pointer;
+  }
+  .btn-link {
+    display: inline-block; margin-top: 10px; background: none; border: none; color: var(--accent);
+    font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 0;
   }
 
-  .btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--gold-deep); }
-  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--gold-deep); }
-
-  .btn-red {
-    background: var(--red-stamp);
-    color: var(--bg-cream);
-    box-shadow: 3px 3px 0 var(--red-deep);
+  .part-picker { position: relative; }
+  .suggest-list {
+    position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--surface-1); border: 1px solid var(--gridline); border-radius: 10px;
+    max-height: 260px; overflow-y: auto; box-shadow: 0 6px 20px rgba(11,11,11,0.12);
   }
-  .btn-red:hover { box-shadow: 4px 4px 0 var(--red-deep); }
-  .btn-red:active { box-shadow: 1px 1px 0 var(--red-deep); }
+  .suggest-item { padding: 10px 12px; border-bottom: 1px solid var(--gridline); cursor: pointer; }
+  .suggest-item:last-child { border-bottom: none; }
+  .suggest-item:active { background: var(--page-plane); }
+  .suggest-model { font-weight: 700; font-size: 14px; }
+  .suggest-name { font-size: 13px; color: var(--text-secondary); }
+  .suggest-stock { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .suggest-empty { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface-1); border: 1px solid var(--gridline); border-radius: 10px; padding: 12px; font-size: 13px; color: var(--muted); }
 
-  /* === 常用食材標籤 === */
-  .quick-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 16px;
-    padding: 12px;
-    background: var(--bg-cream);
-    border: 1px dashed var(--gold-deep);
-    border-radius: 2px;
+  .part-chip { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--gridline); border-radius: 10px; background: var(--surface-1); }
+  .part-chip-model { font-weight: 700; font-size: 15px; }
+  .part-chip-name { font-size: 13px; color: var(--text-secondary); }
+  .part-chip-stock { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .text-critical { color: var(--critical); font-weight: 700; }
+  .warn-icon { margin-right: 4px; }
+
+  .qty-stepper { display: flex; align-items: center; gap: 10px; }
+  .qty-btn { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--gridline); background: var(--surface-1); font-size: 20px; font-weight: 700; cursor: pointer; }
+  .qty-number { width: 80px; text-align: center; padding: 11px 6px; font-size: 16px; border-radius: 10px; border: 1px solid var(--gridline); background: var(--surface-1); }
+
+  .today-list, .recent-box { margin-top: 22px; border-top: 1px solid var(--gridline); padding-top: 12px; }
+  .today-list-title { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
+  .today-item, .recent-item { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 7px 0; border-bottom: 1px solid var(--gridline); }
+
+  .btn-del { padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--critical); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn-del-yes { padding: 5px 10px; border-radius: 8px; border: 1px solid var(--critical); background: var(--critical); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .del-confirm { display: inline-flex; gap: 6px; align-items: center; }
+  .del-busy { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .recent-item { cursor: pointer; }
+  .recent-item:active { background: var(--page-plane); }
+  .today-item-model { font-weight: 700; }
+  .today-item-customer { color: var(--text-secondary); margin-left: auto; }
+
+  /* 領料清單:一個客戶一次可以領好幾樣 */
+  .cart { margin-top: 12px; border: 1px solid var(--gridline); border-radius: 10px; background: var(--surface-1); overflow: hidden; }
+  .cart-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); padding: 10px 12px; background: var(--page-plane); border-bottom: 1px solid var(--gridline); }
+  .cart-item { padding: 12px; border-bottom: 1px solid var(--gridline); }
+  .cart-item:last-child { border-bottom: none; }
+  .cart-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .cart-item-model { font-weight: 700; font-size: 15px; }
+  .cart-item-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .cart-item-stock { color: var(--muted); }
+  .cart-item-controls { margin-top: 10px; }
+  .cart-item-label { margin: 10px 0 0; font-size: 13px; }
+  .cart-item-cost { margin-top: 10px; }
+  .cart-item-cost .field-label { margin-top: 0; }
+  .cart-item-amount { margin-top: 6px; font-size: 13px; }
+  .cart-item-amount strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+  .cart-total { padding: 12px; background: var(--page-plane); border-top: 1px solid var(--gridline); font-size: 14px; }
+  .cart-total strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+
+  .create-part-form, .admin-row-edit { border: 1px solid var(--gridline); border-radius: 10px; padding: 14px; margin-top: 10px; background: var(--surface-1); }
+
+  .stock-list { margin-top: 10px; }
+  .stock-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--gridline); cursor: pointer; }
+  .stock-row-model { font-weight: 700; font-size: 15px; }
+  .stock-row-name { font-size: 13px; color: var(--text-secondary); }
+  .stock-row-qty { font-size: 16px; font-weight: 700; white-space: nowrap; }
+
+  .empty-hint { color: var(--muted); font-size: 13px; padding: 14px 4px; text-align: center; }
+
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(11,11,11,0.45); display: flex; align-items: flex-end; justify-content: center; z-index: 100; }
+  .modal { background: var(--surface-1); width: 100%; max-width: 640px; max-height: 78vh; border-radius: 16px 16px 0 0; display: flex; flex-direction: column; }
+  .modal-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--gridline); }
+  .modal-title { font-size: 17px; font-weight: 700; }
+  .modal-subtitle { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .modal-body { padding: 8px 16px 20px; overflow-y: auto; }
+  .history-item { padding: 8px 0; border-bottom: 1px solid var(--gridline); }
+  .history-item.voided { opacity: 0.5; }
+  .history-row { display: grid; grid-template-columns: 44px 88px 48px 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+  .history-row-sub { font-size: 11px; color: var(--text-secondary); margin-top: 3px; padding-left: 2px; }
+  .history-type { font-weight: 700; font-size: 12px; padding: 3px 6px; border-radius: 6px; text-align: center; }
+  .type-IN { background: var(--good-bg); color: var(--good); }
+  .type-OUT { background: #eaf1fb; color: var(--accent-dark); }
+  .type-RETURN { background: var(--warning-bg); color: #8a5a00; }
+  .voided-tag { font-size: 11px; color: var(--critical); }
+
+  .sub-tab-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .sub-tab { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .sub-tab.active { background: var(--text-primary); border-color: var(--text-primary); color: #fff; }
+
+  .label-queue-row { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--gridline); }
+  .label-queue-info { flex: 1; }
+  .label-queue-model { font-weight: 700; font-size: 14px; }
+  .label-queue-meta { font-size: 12px; color: var(--text-secondary); }
+  .label-queue-copies { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .copies-input { width: 52px; padding: 6px; border-radius: 8px; border: 1px solid var(--gridline); text-align: center; }
+
+  .estimate-note { background: var(--warning-bg); color: #8a5a00; padding: 8px 10px; border-radius: 8px; margin: 4px 0 10px; }
+
+  .cost-preview { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--gridline); font-size: 14px; }
+  .cost-preview strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .cost-preview-note { color: var(--muted); font-size: 12px; margin-left: 6px; }
+
+  .stat-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 10px; }
+  .stat-tile { background: var(--surface-1); border: 1px solid var(--gridline); border-radius: 12px; padding: 14px; }
+  .stat-tile-label { font-size: 12px; color: var(--text-secondary); }
+  .stat-tile-value { font-size: 26px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat-tile-note { font-size: 12px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .warn-hint { font-size: 12px; line-height: 1.5; color: #8a5a00; background: var(--warning-bg); border: 1px solid var(--warning); border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
+  .field-hint-sm { font-size: 12px; line-height: 1.5; color: var(--muted); margin-top: 4px; }
+  .return-note { font-size: 11px; color: var(--muted); margin-left: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* 表格欄位變多時,讓表格自己橫向捲動,不要把整個頁面撐寬 */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 6px; }
+  .report-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .report-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 4px; border-bottom: 1px solid var(--gridline); white-space: nowrap; }
+  .report-table td { padding: 8px 4px; border-bottom: 1px solid var(--gridline); font-variant-numeric: tabular-nums; }
+  .report-table td.nowrap { white-space: nowrap; }
+  .est-mark { color: var(--warning); font-weight: 700; margin-left: 2px; }
+
+  /* 可展開的統計列:點一下看這個客戶／這個人用了哪些零件 */
+  .expandable-row { cursor: pointer; }
+  .expandable-row:hover { background: var(--surface-1); }
+  .expandable-row:active { background: var(--page-plane); }
+  .expand-caret {
+    display: inline-block; width: 14px; color: var(--accent); font-size: 10px;
+    transition: transform 0.15s ease; margin-right: 2px;
   }
+  .expand-caret.open { transform: rotate(90deg); }
+  .expanded-detail > td { background: var(--page-plane); padding: 4px 4px 10px 18px; }
+  .sub-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .sub-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 6px; white-space: nowrap; }
+  .sub-table td { padding: 5px 6px; border-top: 1px solid var(--gridline); font-variant-numeric: tabular-nums; }
 
-  .quick-tag {
-    background: var(--bg-paper);
-    border: 1.5px solid var(--ink-medium);
-    padding: 6px 14px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ink-dark);
-    cursor: pointer;
-    border-radius: 20px;
-    transition: all 0.15s;
-    font-family: 'Noto Sans TC';
+  .date-range-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 14px; flex-wrap: wrap; }
+  .date-range-row .input { flex: 1; min-width: 130px; }
+
+  .admin-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 4px; border-bottom: 1px solid var(--gridline); }
+  .admin-row.inactive { opacity: 0.5; }
+  .admin-row-main { flex: 1; cursor: pointer; }
+  .admin-row-title { font-weight: 700; font-size: 14px; }
+  .admin-row-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .label-tag { color: var(--accent); font-weight: 600; }
+  .edit-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .inline-add-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .inline-add-row .input { flex: 1; }
+
+  .center-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; text-align: center; color: var(--text-secondary); }
+  .error-box { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+
+  /* 操作人選擇鎖:沒選人之前整個畫面都不能動。
+     用 overlay 蓋住而不是換掉整個畫面,這樣底下各頁填到一半的表單不會被清掉。 */
+  .gate-mask {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(11,11,11,0.55); backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
   }
-
-  .quick-tag:hover {
-    background: var(--gold);
-    border-color: var(--gold-deep);
-    color: var(--ink-dark);
-    transform: translateY(-1px);
+  .gate-box {
+    width: 100%; max-width: 380px; max-height: 86vh; overflow-y: auto;
+    background: var(--surface-1); border-radius: 16px; padding: 22px 20px;
+    box-shadow: 0 18px 50px rgba(11,11,11,0.35);
   }
-
-  .quick-tag .remove {
-    margin-left: 6px;
-    color: var(--red-stamp);
-    font-weight: 700;
-  }
-
-  /* === 表格 === */
-  .table-wrapper {
-    overflow-x: auto;
-    border: 2px solid var(--ink-dark);
-    background: var(--bg-cream);
-  }
-
-  table { width: 100%; border-collapse: collapse; }
-
-  th {
-    background: var(--ink-dark);
-    color: var(--gold);
-    padding: 12px 10px;
-    text-align: left;
-    font-family: 'Noto Serif TC', serif;
-    font-weight: 700;
-    font-size: 14px;
-    letter-spacing: 0.1em;
-    white-space: nowrap;
-  }
-
-  td {
-    padding: 10px;
-    border-bottom: 1px dashed var(--gold-deep);
-    font-size: 14px;
-  }
-
-  tbody tr:hover { background: rgba(212, 162, 76, 0.1); }
-  tbody tr:last-child td { border-bottom: none; }
-
-  .amount {
-    font-family: 'Noto Serif TC', serif;
-    font-weight: 600;
-    text-align: right;
-  }
-  .amount.in { color: var(--gold-deep); }
-  .amount.out { color: var(--red-stamp); }
-
-  .empty-state {
+  .gate-title { font-size: 19px; font-weight: 700; text-align: center; }
+  .gate-sub { font-size: 13px; color: var(--muted); text-align: center; margin-top: 6px; }
+  .gate-reason {
+    margin-top: 14px; padding: 10px 12px; border-radius: 10px;
+    background: var(--warning-bg); color: #7a5200; font-size: 13px; font-weight: 600;
     text-align: center;
-    padding: 40px 20px;
-    color: var(--ink-medium);
-    font-family: 'Zen Kurenaido', cursive;
-    font-size: 16px;
-    letter-spacing: 0.2em;
   }
-
-  /* === 圖表區 === */
-  .chart-container {
-    background: var(--bg-cream);
-    padding: 20px;
-    border: 1px dashed var(--gold-deep);
-    height: 320px;
-    position: relative;
+  .gate-list { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+  .gate-btn {
+    width: 100%; padding: 16px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--page-plane); color: var(--text-primary);
+    font-size: 17px; font-weight: 700; cursor: pointer;
   }
+  .gate-btn:active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-  /* === 分頁內容 === */
-  .tab-content { display: none; animation: fadeIn 0.3s ease; }
-  .tab-content.active { display: block; }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .action-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-
-  /* === 提示訊息 === */
   .toast {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100px);
-    background: var(--ink-dark);
-    color: var(--gold);
-    padding: 14px 28px;
-    border-radius: 2px;
-    font-family: 'Noto Serif TC', serif;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    box-shadow: 4px 4px 0 var(--red-stamp);
-    z-index: 1000;
-    transition: transform 0.3s;
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    max-width: 90%; padding: 12px 18px; border-radius: 10px; font-size: 14px; font-weight: 600;
+    box-shadow: 0 8px 24px rgba(11,11,11,0.25); z-index: 200; color: #fff;
   }
-  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast-success { background: var(--good); }
+  .toast-error { background: var(--critical); }
+  .toast-warning { background: #a86a00; }
 
-  /* === 分類標籤 === */
-  .cat-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 700;
-    color: white;
-    letter-spacing: 0.05em;
-    white-space: nowrap;
-  }
-  .cat-food { background: var(--cat-food); }
-  .cat-utility { background: var(--cat-utility); }
-  .cat-rent { background: var(--cat-rent); }
-  .cat-equip { background: var(--cat-equip); }
-  .cat-misc { background: var(--cat-misc); }
+  /* 標籤列印用一個獨立的 #print-root(portal),平常隱藏。
+     螢幕顯示時完全不佔版面;列印時把 #root(整個系統畫面)整個藏起來,
+     只留 #print-root。這樣才不會因為畫面其他內容還「佔著版面高度」
+     (即使只是 visibility:hidden)而在標籤機印出一堆空白標籤。 */
+  #print-root { display: none; }
 
-  /* === 分類選擇器 === */
-  .cat-selector {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-bottom: 14px;
-  }
-  .cat-option {
-    padding: 8px 14px;
-    border: 2px solid var(--ink-medium);
-    background: var(--bg-cream);
-    cursor: pointer;
-    border-radius: 4px;
-    font-family: 'Noto Serif TC', serif;
-    font-weight: 600;
-    font-size: 13px;
-    transition: all 0.15s;
-    color: var(--ink-dark);
-  }
-  .cat-option:hover { background: var(--gold); }
-  .cat-option.active {
-    background: var(--ink-dark);
-    color: var(--gold);
-    border-color: var(--ink-dark);
+  @media print {
+    body { background: #fff; }
+    #root { display: none; }
+    #print-root { display: block; }
+    .label {
+      page-break-after: always; page-break-inside: avoid;
+      display: flex; align-items: center; justify-content: center; text-align: center;
+      padding: 1.5mm; margin: 0; overflow: hidden;
+    }
+    .label:last-child { page-break-after: auto; }
+    .label-line { font-weight: 700; line-height: 1.25; overflow-wrap: break-word; word-break: normal; }
   }
 
-  /* === RWD === */
-  @media (max-width: 600px) {
-    .container { padding: 16px 12px 60px; }
-    .stamp { width: 60px; height: 60px; font-size: 11px; top: 10px; right: 10px; }
-    .summary-value { font-size: 28px; }
-    .header-banner { padding: 16px 20px; }
-    .header-banner::before, .header-banner::after { display: none; }
-    .tab { padding: 10px 14px; font-size: 13px; }
-    .card { padding: 16px; }
-    th, td { padding: 8px 6px; font-size: 13px; }
+  /* 明細列印(給助理去拿貨用的清單),跟標籤一樣透過 #print-root 這個 portal 輸出 */
+  .detail-sheet { padding: 4mm; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif; }
+  .detail-sheet h1 { font-size: 22px; margin: 0 0 3mm; }
+  .detail-sheet .detail-meta { font-size: 12px; color: #444; margin-bottom: 6mm; }
+  .detail-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }
+  .detail-table th, .detail-table td { border: 1px solid #999; padding: 5px 6px; text-align: left; vertical-align: top; }
+  .detail-table th { background: #eee; white-space: nowrap; }
+  .detail-table td.nowrap { white-space: nowrap; }
+</style>
+<style>
+  /* ===== 以下為叫修系統新增的樣式,顏色/字體沿用上面既有的設計 tokens ===== */
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); font-size: 20px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
+  .back-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .back-btn { background: none; border: none; color: var(--accent); font-size: 15px; font-weight: 600; cursor: pointer; padding: 6px 0; }
 
-  /* === 刪除按鈕 === */
-  .btn-delete {
-    background: transparent;
-    color: var(--red-stamp);
-    border: 1px solid var(--red-stamp);
-    padding: 4px 10px;
-    cursor: pointer;
-    font-size: 12px;
-    border-radius: 2px;
-    transition: all 0.15s;
-    box-shadow: none;
-  }
-  .btn-delete:hover { background: var(--red-stamp); color: var(--bg-cream); }
+  .ticket-card { border: 1px solid var(--gridline); border-radius: 12px; background: var(--surface-1); padding: 14px; margin-bottom: 10px; cursor: pointer; }
+  .ticket-card:active { background: var(--page-plane); }
+  .ticket-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .ticket-card-customer { font-weight: 700; font-size: 16px; }
+  .ticket-card-id { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .ticket-card-meta { font-size: 13px; color: var(--text-secondary); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .ticket-card-desc { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
+  .status-badge { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+  .dispatch-tag { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--page-plane); color: var(--text-secondary); }
+
+  .fab { position: fixed; right: 20px; bottom: 24px; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 28px; font-weight: 700; border: none; box-shadow: 0 8px 20px rgba(11,11,11,0.25); cursor: pointer; z-index: 50; display: flex; align-items: center; justify-content: center; }
+
+  .toggle-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .toggle-btn { flex: 1 1 auto; min-width: 84px; padding: 11px 10px; border-radius: 10px; border: 1px solid var(--gridline); background: var(--surface-1); color: var(--text-primary); font-size: 14px; font-weight: 600; cursor: pointer; text-align: center; }
+  .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .detail-card { border: 1px solid var(--gridline); border-radius: 14px; background: var(--surface-1); padding: 6px 18px; }
+  .detail-row { padding: 14px 0; border-bottom: 1px solid var(--gridline); }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { font-size: 12px; color: var(--accent-dark); font-weight: 700; margin-bottom: 4px; }
+  .detail-value { font-size: 16px; color: var(--text-primary); display: flex; align-items: center; justify-content: space-between; gap: 8px; word-break: break-all; }
+  .detail-map-icon { color: var(--muted); flex-shrink: 0; text-decoration: none; font-size: 18px; }
+
+  .search-box { margin-bottom: 12px; }
+  .customer-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 4px; border-bottom: 1px solid var(--gridline); cursor: pointer; }
+  .customer-row:active { background: var(--page-plane); }
+  .customer-row-name { font-weight: 700; font-size: 15px; }
+  .customer-row-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  .part-cart-empty { font-size: 13px; color: var(--muted); padding: 10px 0; }
+  .inv-warn { font-size: 12px; color: #8a5a00; background: var(--warning-bg); border: 1px solid var(--warning); border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
+
+  .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
+  .photo-thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--gridline); background: var(--page-plane); }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo-remove { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(11,11,11,0.6); color: #fff; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .photo-add-btn { aspect-ratio: 1; border-radius: 10px; border: 1px dashed var(--gridline); background: var(--surface-1); color: var(--text-secondary); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; padding: 6px; }
+
+  .meter-picked { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--accent); background: #eaf1fb; }
+  .meter-picked-name { font-weight: 700; font-size: 15px; color: var(--accent-dark); }
+  .meter-picked-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .meter-change { flex-shrink: 0; background: none; border: none; color: var(--accent); font-size: 14px; font-weight: 600; cursor: pointer; padding: 6px 2px; }
 </style>
 </head>
 <body>
+<div id="root"></div>
 
-<div class="sync-bar" id="syncBar">
-  <span class="sync-dot"></span>
-  <span id="syncText">啟動中...</span>
-</div>
-
-<header>
-  <div class="stamp">炒飯<br>記帳本</div>
-  <div class="header-banner">
-    <h1>炒飯記帳簿</h1>
-    <div class="subtitle">F R I E D &nbsp; R I C E &nbsp; L E D G E R</div>
-  </div>
-</header>
-
-<div class="container">
-
-  <div class="month-picker">
-    <button onclick="changeMonth(-1)">‹</button>
-    <div class="month-display" id="monthDisplay">2026 年 4 月</div>
-    <button onclick="changeMonth(1)">›</button>
-  </div>
-
-  <div class="summary-grid">
-    <div class="summary-card income">
-      <div class="summary-label">本月總收入</div>
-      <div class="summary-value" id="totalIncome">0</div>
-      <div class="summary-sub" id="incomeDays">— 0 天營業 —</div>
-    </div>
-    <div class="summary-card cost">
-      <div class="summary-label">本月總支出</div>
-      <div class="summary-value" id="totalCost">0</div>
-      <div class="summary-sub" id="costCount">— 0 筆支出 —</div>
-    </div>
-    <div class="summary-card profit">
-      <div class="summary-label">本月實際淨賺</div>
-      <div class="summary-value" id="netProfit">0</div>
-      <div class="summary-sub" id="profitMargin">— 利潤率 0% —</div>
-    </div>
-  </div>
-
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('income')">每日營收</button>
-    <button class="tab" onclick="switchTab('cost')">支出記錄</button>
-    <button class="tab" onclick="switchTab('chart')">月報圖表</button>
-    <button class="tab" onclick="switchTab('settings')">常用食材</button>
-  </div>
-
-  <div id="tab-income" class="tab-content active">
-    <div class="card">
-      <div class="card-title">記錄今日營收</div>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>日期</label>
-          <input type="date" id="incomeDate">
-        </div>
-        <div class="form-group">
-          <label>營業額 (元)</label>
-          <input type="number" id="incomeAmount" placeholder="例: 3500" min="0">
-        </div>
-        <div class="form-group">
-          <label>備註 (選填)</label>
-          <input type="text" id="incomeNote" placeholder="例: 今天客人多">
-        </div>
-      </div>
-      <button class="btn btn-red" onclick="addIncome()">＋ 新增營收</button>
-    </div>
-
-    <div class="card">
-      <div class="card-title">本月營收明細</div>
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>日期</th>
-              <th>營業額</th>
-              <th>備註</th>
-              <th style="width:80px;">操作</th>
-            </tr>
-          </thead>
-          <tbody id="incomeTable"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div id="tab-cost" class="tab-content">
-    <div class="card">
-      <div class="card-title">記錄支出</div>
-
-      <label style="font-family:'Noto Serif TC', serif; font-size:13px; font-weight:600; color:var(--ink-medium); letter-spacing:0.1em; display:block; margin-bottom:8px;">支出類別</label>
-      <div class="cat-selector" id="catSelector">
-        <div class="cat-option active" data-cat="food" onclick="selectCategory('food')">🥬 食材</div>
-        <div class="cat-option" data-cat="utility" onclick="selectCategory('utility')">💡 水電瓦斯</div>
-        <div class="cat-option" data-cat="rent" onclick="selectCategory('rent')">🏠 租金</div>
-        <div class="cat-option" data-cat="equip" onclick="selectCategory('equip')">🔧 設備工具</div>
-        <div class="cat-option" data-cat="misc" onclick="selectCategory('misc')">📦 雜項</div>
-      </div>
-
-      <div class="quick-tags" id="quickTagsArea"></div>
-
-      <div class="form-grid">
-        <div class="form-group">
-          <label>日期</label>
-          <input type="date" id="costDate">
-        </div>
-        <div class="form-group">
-          <label id="itemLabel">項目名稱</label>
-          <input type="text" id="costItem" placeholder="例: 雞蛋">
-        </div>
-        <div class="form-group">
-          <label>金額 (元)</label>
-          <input type="number" id="costAmount" placeholder="例: 150" min="0">
-        </div>
-        <div class="form-group">
-          <label>數量/備註 (選填)</label>
-          <input type="text" id="costNote" placeholder="例: 1箱">
-        </div>
-      </div>
-      <button class="btn btn-red" onclick="addCost()">＋ 新增支出</button>
-    </div>
-
-    <div class="card">
-      <div class="card-title">本月支出分類小計</div>
-      <div id="catSummary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">本月支出明細</div>
-      <div style="margin-bottom:12px;">
-        <label style="font-size:13px; color:var(--ink-medium); margin-right:8px;">篩選類別:</label>
-        <select id="filterCategory" onchange="renderCostTable()" style="width:auto; display:inline-block;">
-          <option value="all">全部</option>
-          <option value="food">🥬 食材</option>
-          <option value="utility">💡 水電瓦斯</option>
-          <option value="rent">🏠 租金</option>
-          <option value="equip">🔧 設備工具</option>
-          <option value="misc">📦 雜項</option>
-        </select>
-      </div>
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>日期</th>
-              <th>類別</th>
-              <th>項目</th>
-              <th>金額</th>
-              <th>備註</th>
-              <th style="width:80px;">操作</th>
-            </tr>
-          </thead>
-          <tbody id="costTable"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div id="tab-chart" class="tab-content">
-    <div class="card">
-      <div class="card-title">每日營收 vs 支出</div>
-      <div class="chart-container"><canvas id="dailyChart"></canvas></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">支出分類比例</div>
-      <div class="chart-container"><canvas id="categoryChart"></canvas></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">資料管理</div>
-      <div class="action-row">
-        <button class="btn" onclick="manualSync()">🔄 立即同步</button>
-        <button class="btn" onclick="exportData()">📥 匯出備份 (JSON)</button>
-        <button class="btn" onclick="exportCSV()">📊 匯出 Excel (CSV)</button>
-        <button class="btn" onclick="document.getElementById('importFile').click()">📂 匯入備份</button>
-        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
-      </div>
-      <p style="margin-top: 12px; font-size: 12px; color: var(--ink-medium); font-family: 'Zen Kurenaido', cursive; letter-spacing: 0.1em;">
-        ※ 資料會自動同步雲端,離線時會先存在本機,有網路時自動上傳
-      </p>
-    </div>
-  </div>
-
-  <div id="tab-settings" class="tab-content">
-    <div class="card">
-      <div class="card-title">常用食材清單</div>
-      <p style="color: var(--ink-medium); font-size: 13px; margin-bottom: 14px; font-family: 'Zen Kurenaido', cursive; letter-spacing: 0.1em;">
-        ※ 在「支出記錄」頁籤點一下標籤就能快速填入名稱
-      </p>
-      <div class="form-grid" style="grid-template-columns: 1fr 1fr auto;">
-        <div class="form-group">
-          <label>食材名稱</label>
-          <input type="text" id="newTagName" placeholder="例: 高麗菜">
-        </div>
-        <div class="form-group">
-          <label>常見金額 (選填)</label>
-          <input type="number" id="newTagAmount" placeholder="例: 80">
-        </div>
-        <div class="form-group">
-          <label>&nbsp;</label>
-          <button class="btn" onclick="addTag()">＋ 新增</button>
-        </div>
-      </div>
-
-      <div style="margin-top: 20px;">
-        <div class="quick-tags" id="settingsTagsArea" style="border-style: solid; border-color: var(--ink-medium);"></div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<div class="toast" id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 
 <script>
-// ============================================
-// PWA + Service Worker (離線可用 + 自動更新)
-// ============================================
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js')
-      .then(reg => {
-        console.log('[PWA] Service Worker 已註冊', reg.scope);
-        reg.update();
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          if (!newWorker) return;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[PWA] 偵測到新版,正在更新...');
-              newWorker.postMessage({ type: 'SKIP_WAITING' });
-            }
-          });
-        });
-      })
-      .catch(err => { console.log('[PWA] Service Worker 註冊失敗:', err); });
+"use strict";
+var h = React.createElement;
 
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return;
-      refreshing = true;
-      window.location.reload();
+/* ============================================================
+ * 共用工具(跟庫存系統那份 Index.html 一樣的寫法)
+ * ============================================================ */
+/* ============================================================
+ * 連線方式(同一份檔案兩邊都能用)
+ * - 貼在 Apps Script 裡開啟:走 google.script.run,不需要密碼。
+ * - 放在 GitHub Pages 等外部網站:走 fetch 呼叫 Apps Script 的 API(doPost),
+ *   需要輸入 Settings 分頁 ApiPassword 那組存取密碼,輸入一次之後這台裝置會記住。
+ * 只要把 API_URL 換成你部署後的 /exec 網址即可。
+ * ============================================================ */
+var API_URL = "https://script.google.com/macros/s/AKfycbzB-Ry74ubI9b-B3zg_uWy39OaMzKjkWGeeDC3huIC3dyMDHjwsIE9tDDi0fjYIpZSrpA/exec";
+var PW_KEY = "repair_api_password";
+var CACHE_KEY = "repair_bootstrap_cache_v1";
+
+function inAppsScript_() {
+  return !!(window.google && window.google.script && window.google.script.run);
+}
+function getPw_() {
+  try { return localStorage.getItem(PW_KEY) || ""; } catch (e) { return ""; }
+}
+function setPw_(v) {
+  try { if (v) localStorage.setItem(PW_KEY, v); else localStorage.removeItem(PW_KEY); } catch (e) {}
+}
+function needsLogin_() { return !inAppsScript_() && !getPw_(); }
+function readCache_() {
+  try { var s = localStorage.getItem(CACHE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+}
+function writeCache_(d) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch (e) {}
+}
+function clearCache_() {
+  try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+}
+
+function gsRun(fnName) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  if (inAppsScript_()) {
+    return new Promise(function (resolve, reject) {
+      var runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(function (err) {
+        reject(new Error(err && err.message ? err.message : String(err)));
+      });
+      runner[fnName].apply(runner, args);
     });
+  }
+  // 不要加 Content-Type 之類的自訂 header,瀏覽器會自動用 text/plain,這樣才不會觸發 CORS preflight 被擋
+  return fetch(API_URL, {
+    method: "POST",
+    body: JSON.stringify({ fn: fnName, args: args, password: getPw_() })
+  }).then(function (r) { return r.json(); }).then(function (res) {
+    if (res && res.ok) return res.data;
+    var e = new Error((res && res.error) || "伺服器沒有回應正確的資料");
+    if (res && res.code) e.code = res.code;
+    throw e;
+  }, function () {
+    throw new Error("連不上伺服器,請檢查網路後再試一次");
   });
 }
 
-// ============================================
-// 分類設定
-// ============================================
-const CATEGORIES = {
-  food:    { name: '食材',     emoji: '🥬', color: 'cat-food' },
-  utility: { name: '水電瓦斯', emoji: '💡', color: 'cat-utility' },
-  rent:    { name: '租金',     emoji: '🏠', color: 'cat-rent' },
-  equip:   { name: '設備工具', emoji: '🔧', color: 'cat-equip' },
-  misc:    { name: '雜項',     emoji: '📦', color: 'cat-misc' }
-};
-
-let currentCategory = 'food';
-
-// ============================================
-// 設定:雲端 API + 本地儲存
-// ============================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbyHiD5DLVFZ82WvJUPLSuM_VkmmEukd-9Er_uzbVSfNkEnXRq2a388jtjVqVn_AdZQ8/exec';
-const API_SECRET = 'pomelo2026';
-const LOCAL_KEY = 'fried_rice_ledger_v3';
-
-// ============================================
-// 資料模型
-// ============================================
-let data = {
-  income: [],
-  cost: [],
-  tags: [
-    { name: '雞蛋', amount: 150 },
-    { name: '白米', amount: 600 },
-    { name: '青蔥', amount: 50 },
-    { name: '高麗菜', amount: 80 },
-    { name: '紅蘿蔔', amount: 40 },
-    { name: '醬油', amount: 100 },
-    { name: '食用油', amount: 250 },
-    { name: '雞肉', amount: 200 },
-    { name: '蝦仁', amount: 300 },
-    { name: '火腿', amount: 120 }
-  ],
-  lastModified: 0
-};
-
-let currentYear = new Date().getFullYear();
-let currentMonth = new Date().getMonth() + 1;
-
-// ============================================
-// 同步狀態管理
-// ============================================
-let syncStatus = 'idle';
-let pendingSync = false;
-let syncDebounceTimer = null;
-
-function setSyncStatus(status, msg) {
-  syncStatus = status;
-  const bar = document.getElementById('syncBar');
-  const text = document.getElementById('syncText');
-  bar.className = 'sync-bar ' + status;
-  text.textContent = msg;
+function txt(v) {
+  return v === undefined || v === null ? "" : String(v);
 }
 
-// ============================================
-// 本地儲存 (修正版: 不更新時間戳記)
-// ============================================
-function saveLocal() {
-  try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.error('本地儲存失敗:', e);
-  }
+function pad2_(n) { return (n < 10 ? "0" : "") + n; }
+
+function nowLocalInputValue() {
+  var d = new Date();
+  return d.getFullYear() + "-" + pad2_(d.getMonth() + 1) + "-" + pad2_(d.getDate()) + "T" + pad2_(d.getHours()) + ":" + pad2_(d.getMinutes());
 }
 
-function loadLocal() {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    if (parsed.income) data.income = parsed.income;
-    if (parsed.cost) data.cost = parsed.cost;
-    if (parsed.tags && parsed.tags.length > 0) data.tags = parsed.tags;
-    if (parsed.lastModified) data.lastModified = parsed.lastModified;
-    return true;
-  } catch (e) {
-    console.error('本地讀取失敗:', e);
-    return false;
-  }
+function fmtDateTime(v) {
+  if (!v) return "";
+  var s = String(v).replace(" ", "T");
+  var d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  return (d.getMonth() + 1) + "/" + d.getDate() + " " + pad2_(d.getHours()) + ":" + pad2_(d.getMinutes());
 }
 
-// ============================================
-// 雲端同步
-// ============================================
-async function syncToCloud() {
-  if (!navigator.onLine) {
-    setSyncStatus('offline', '⚠ 離線中,連線後會自動同步');
-    pendingSync = true;
-    return;
-  }
+function statusColor(status) {
+  if (status === "已完成") return { background: "var(--good-bg)", color: "var(--good)" };
+  if (status === "待料") return { background: "var(--warning-bg)", color: "#8a5a00" };
+  if (status === "待下次送碳粉") return { background: "#eaf1fb", color: "var(--accent-dark)" };
+  return { background: "var(--critical-bg)", color: "var(--critical)" };
+}
 
-  if (syncStatus === 'syncing') {
-    pendingSync = true;
-    return;
-  }
+/* ============================================================
+ * 小元件
+ * ============================================================ */
+function Toast(props) {
+  if (!props.toast) return null;
+  return h("div", { className: "toast toast-" + props.toast.type }, props.toast.message);
+}
 
-  setSyncStatus('syncing', '⏳ 同步中...');
+function ToggleRow(props) {
+  // options: string[]; value: string; onChange(v)
+  return h("div", { className: "toggle-row" },
+    props.options.map(function (opt) {
+      return h("button", {
+        key: opt,
+        type: "button",
+        className: "toggle-btn" + (props.value === opt ? " active" : ""),
+        onClick: function () { props.onChange(opt); }
+      }, opt);
+    })
+  );
+}
 
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'save',
-        secret: API_SECRET,
-        data: data
+function MultiToggleRow(props) {
+  // options: string[]; value: string[]; onChange(newArray) —— 可以同時選多個,再點一次取消
+  var selected = props.value || [];
+  return h("div", { className: "toggle-row" },
+    props.options.map(function (opt) {
+      var active = selected.indexOf(opt) !== -1;
+      return h("button", {
+        key: opt,
+        type: "button",
+        className: "toggle-btn" + (active ? " active" : ""),
+        onClick: function () {
+          if (active) props.onChange(selected.filter(function (v) { return v !== opt; }));
+          else props.onChange(selected.concat([opt]));
+        }
+      }, opt);
+    })
+  );
+}
+
+function TicketCard(props) {
+  var t = props.ticket;
+  var sc = statusColor(t.status);
+  return h("div", { className: "ticket-card", onClick: function () { props.onOpen(t); } },
+    h("div", { className: "ticket-card-top" },
+      h("div", null,
+        h("div", { className: "ticket-card-customer" }, t.customerName),
+        h("div", { className: "ticket-card-id" }, "#" + t.ticketId + "　" + fmtDateTime(t.createdAt))
+      ),
+      h("span", { className: "status-badge", style: sc }, t.status)
+    ),
+    h("div", { className: "ticket-card-meta" },
+      h("span", { className: "dispatch-tag" }, t.dispatchType),
+      t.technician ? h("span", null, "👤 " + String(t.technician).split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean).join("、")) : h("span", { style: { color: "var(--muted)" } }, "尚未指派"),
+      t.parts && t.parts.length ? h("span", null, "🔧 " + t.parts.length + " 項零件") : null,
+      t.status === "待下次送碳粉" && t.meterCustomerName ? h("span", null, "📋 抄表提醒:" + t.meterCustomerName) : null
+    ),
+    t.description ? h("div", { className: "ticket-card-desc" }, t.description) : null
+  );
+}
+
+/* ============================================================
+ * 叫修列表頁
+ * ============================================================ */
+function TicketListPage(props) {
+  var _f = React.useState("全部"), filter = _f[0], setFilter = _f[1];
+  var tabs = props.statusList.concat(["送貨", "全部"]);
+  var filtered = props.tickets.filter(function (t) {
+    if (filter === "全部") return true;
+    // 「送貨」看的是派工類別,而且只列還沒完成的,出車前一眼就知道有哪幾家要送
+    if (filter === "送貨") return t.dispatchType === "送貨" && t.status !== "已完成";
+    return t.status === filter;
+  });
+
+  return h("div", null,
+    h("div", { className: "page-title" }, "叫修列表"),
+    h("div", { className: "sub-tab-row" },
+      tabs.map(function (tab) {
+        return h("button", {
+          key: tab, type: "button",
+          className: "sub-tab" + (filter === tab ? " active" : ""),
+          onClick: function () { setFilter(tab); }
+        }, tab);
       })
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    setSyncStatus('success', '✅ 已同步雲端');
-    pendingSync = false;
-    setTimeout(() => { if (syncStatus === 'success') setSyncStatus('idle', '☁ 雲端已同步'); }, 5000);
-  } catch (e) {
-    console.error('同步失敗:', e);
-    setSyncStatus('error', '❌ 同步失敗,稍後重試');
-    pendingSync = true;
-    setTimeout(() => { if (pendingSync) syncToCloud(); }, 30000);
-  }
-
-  if (pendingSync && syncStatus !== 'syncing') {
-    setTimeout(syncToCloud, 1000);
-  }
+    ),
+    filtered.length === 0 ? h("div", { className: "empty-hint" }, "沒有符合的叫修單") :
+      filtered.map(function (t) { return h(TicketCard, { key: t.ticketId, ticket: t, onOpen: props.onOpen }); }),
+    h("button", { className: "fab", onClick: props.onNew, title: "新增叫修" }, "+")
+  );
 }
 
-// 防抖 (修正版: 只有真正操作時更新時間戳記)
-function scheduleSync() {
-  data.lastModified = Date.now();
-  saveLocal();
-  if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
-  syncDebounceTimer = setTimeout(syncToCloud, 1500);
-}
+/* ============================================================
+ * 叫修單表單頁(新增 / 編輯)
+ * ============================================================ */
+function TicketFormPage(props) {
+  var editing = props.ticket; // null = 新增
+  var isNew = !editing;
 
-// ============================================
-// 從雲端載入 (修正版: 解除死結)
-// ============================================
-async function loadFromCloud() {
-  if (!navigator.onLine) {
-    setSyncStatus('offline', '⚠ 離線中,使用本機資料');
-    return;
+  var _createdAt = React.useState(editing ? editing.createdAt : nowLocalInputValue()), createdAt = _createdAt[0], setCreatedAt = _createdAt[1];
+  var _customerId = React.useState(editing ? editing.customerId : ""), customerId = _customerId[0], setCustomerId = _customerId[1];
+  var _customerName = React.useState(editing ? editing.customerName : ""), customerName = _customerName[0], setCustomerName = _customerName[1];
+  var _customerQuery = React.useState(""), customerQuery = _customerQuery[0], setCustomerQuery = _customerQuery[1];
+  var _showCustPicker = React.useState(false), showCustPicker = _showCustPicker[0], setShowCustPicker = _showCustPicker[1];
+  var _dispatchType = React.useState(editing ? editing.dispatchType : props.dispatchTypes[0]), dispatchType = _dispatchType[0], setDispatchType = _dispatchType[1];
+  var _description = React.useState(editing ? editing.description : ""), description = _description[0], setDescription = _description[1];
+  var _technician = React.useState(editing && editing.technician ? String(editing.technician).split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean) : []), technicianList = _technician[0], setTechnicianList = _technician[1];
+  var _status = React.useState(editing ? editing.status : props.statusList[0]), status = _status[0], setStatus = _status[1];
+  var _note = React.useState(editing ? editing.note : ""), note = _note[0], setNote = _note[1];
+  var _cart = React.useState(editing && editing.parts ? editing.parts.slice() : []), cart = _cart[0], setCart = _cart[1];
+  var _partQuery = React.useState(""), partQuery = _partQuery[0], setPartQuery = _partQuery[1];
+  var _saving = React.useState(false), saving = _saving[0], setSaving = _saving[1];
+  var _photos = React.useState(editing && editing.photos ? editing.photos.slice() : []), photos = _photos[0], setPhotos = _photos[1];
+  var _uploading = React.useState(false), uploading = _uploading[0], setUploading = _uploading[1];
+  var _showDeleteConfirm = React.useState(false), showDeleteConfirm = _showDeleteConfirm[0], setShowDeleteConfirm = _showDeleteConfirm[1];
+  var _deletePassword = React.useState(""), deletePassword = _deletePassword[0], setDeletePassword = _deletePassword[1];
+  var _deleting = React.useState(false), deleting = _deleting[0], setDeleting = _deleting[1];
+
+  var showPhotos = !isNew && (dispatchType === "故障叫修" || dispatchType === "送貨");
+  // 只有故障叫修會從叫修單扣庫存;補碳粉、送貨的東西是在庫存系統領料時就扣掉了
+  var showParts = dispatchType === "故障叫修";
+  // 新增時也開放選零件:補碳粉先選好要帶哪支碳粉,技師在抄表 App 按一下結案就能正確扣庫存
+
+  // 「待下次送碳粉」要選抄表客戶,抄表系統首頁才會提醒這家要順便送碳粉
+  var _meterId = React.useState(editing ? (editing.meterCustomerId || "") : ""), meterId = _meterId[0], setMeterId = _meterId[1];
+  var _meterName = React.useState(editing ? (editing.meterCustomerName || "") : ""), meterName = _meterName[0], setMeterName = _meterName[1];
+  var _meterQuery = React.useState(""), meterQuery = _meterQuery[0], setMeterQuery = _meterQuery[1];
+  var meterList = props.meterCustomers || [];
+  var wantsToner = status === "待下次送碳粉";
+  var needMeter = wantsToner && props.meterLinked && meterList.length > 0;
+  function normName_(v) { return String(v || "").replace(/[\s\-－_()（）.．]/g, "").toLowerCase(); }
+  var meterSelected = meterId
+    ? (meterList.filter(function (m) { return m.id === meterId; })[0] || { id: meterId, name: meterName, dist: "", owner: "" })
+    : null;
+  var meterTyped = (needMeter && !meterId && meterQuery)
+    ? meterList.filter(function (m) {
+        var q = normName_(meterQuery);
+        return normName_(m.name).indexOf(q) !== -1 || normName_(m.id).indexOf(q) !== -1;
+      }).slice(0, 8)
+    : [];
+  // 還沒打字時,用叫修單的客戶名稱猜幾家可能的,點一下就選好
+  var meterGuess = (needMeter && !meterId && !meterQuery && customerName)
+    ? (function () {
+        var base = normName_(customerName), head2 = base.slice(0, 2);
+        return meterList.filter(function (m) {
+          var n = normName_(m.name);
+          return n && (n.indexOf(base) !== -1 || base.indexOf(n) !== -1 || (head2.length === 2 && n.indexOf(head2) === 0));
+        }).slice(0, 6);
+      })()
+    : [];
+  function pickMeter(m) { setMeterId(m.id); setMeterName(m.name); setMeterQuery(""); }
+  var techOptions = props.technicians.map(function (t) { return t.name; });
+  var statusOptions = isNew ? props.statusList.filter(function (s) { return s !== "已完成"; }) : props.statusList;
+
+  var custMatches = customerQuery
+    ? props.customers.filter(function (c) { return c.name.toLowerCase().indexOf(customerQuery.toLowerCase()) !== -1; }).slice(0, 8)
+    : [];
+
+  var partMatches = partQuery
+    ? props.parts.filter(function (p) {
+        return p.model.toLowerCase().indexOf(partQuery.toLowerCase()) !== -1 || p.name.toLowerCase().indexOf(partQuery.toLowerCase()) !== -1;
+      }).slice(0, 8)
+    : [];
+
+  function addPart(p) {
+    var exists = cart.some(function (c) { return c.model === p.model; });
+    if (exists) { setPartQuery(""); return; }
+    setCart(cart.concat([{ model: p.model, name: p.name, qty: 1 }]));
+    setPartQuery("");
+  }
+  function removePart(model) {
+    setCart(cart.filter(function (c) { return c.model !== model; }));
+  }
+  function changeQty(model, qty) {
+    qty = Math.max(1, Number(qty) || 1);
+    setCart(cart.map(function (c) { return c.model === model ? Object.assign({}, c, { qty: qty }) : c; }));
   }
 
-  setSyncStatus('syncing', '⏳ 連線雲端...');
-
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'load', secret: API_SECRET })
+  // 手機拍照原始檔通常好幾 MB,傳之前先壓縮到最長邊 1280px、JPEG 品質 0.72,避免上傳太慢或太占空間
+  function compressImage(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error("讀取照片失敗")); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error("圖片格式無法讀取")); };
+        img.onload = function () {
+          var maxDim = 1280;
+          var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          var canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          var ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.72));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const cloud = await res.json();
+  }
 
-    const cloudTime = cloud.lastModified || 0;
-    const localTime = data.lastModified || 0;
+  function handlePhotoSelect(e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
+    e.target.value = "";
+    files.forEach(function (file) {
+      setUploading(true);
+      compressImage(file).then(function (dataUrl) {
+        return gsRun("uploadTicketPhoto", { ticketId: editing.ticketId, dataUrl: dataUrl, fileName: file.name });
+      }).then(function (updatedPhotos) {
+        setPhotos(updatedPhotos);
+        setUploading(false);
+      }).catch(function (err) {
+        setUploading(false);
+        props.showToast(err.message || "照片上傳失敗", "error");
+      });
+    });
+  }
 
-    if (cloudTime > localTime) {
-      if (cloud.income) data.income = cloud.income;
-      if (cloud.cost) data.cost = cloud.cost;
-      if (cloud.tags && cloud.tags.length > 0) data.tags = cloud.tags;
-      data.lastModified = cloudTime;
-      saveLocal();
-      setSyncStatus('success', '✅ 已從雲端更新');
-    } else if (localTime > cloudTime) {
-      syncStatus = 'idle'; // 解除鎖定
-      await syncToCloud();
-    } else {
-      setSyncStatus('success', '✅ 已是最新');
+  function removePhoto(fileId) {
+    gsRun("deleteTicketPhoto", { ticketId: editing.ticketId, fileId: fileId }).then(function (updatedPhotos) {
+      setPhotos(updatedPhotos);
+    }).catch(function (err) { props.showToast(err.message || "刪除照片失敗", "error"); });
+  }
+
+  function doDeleteTicket() {
+    if (!deletePassword) { props.showToast("請輸入密碼", "error"); return; }
+    setDeleting(true);
+    gsRun("deleteTicket", { ticketId: editing.ticketId, password: deletePassword }).then(function () {
+      setDeleting(false);
+      props.showToast("已刪除這張叫修單", "success");
+      props.onSaved();
+    }).catch(function (err) {
+      setDeleting(false);
+      props.showToast(err.message || "刪除失敗", "error");
+    });
+  }
+
+  function save() {
+    if (!customerName) { props.showToast("請選擇客戶", "error"); return; }
+    if (status === "已完成" && dispatchType === "故障叫修" && !String(note || "").trim()) {
+      props.showToast("請填寫維修內容才能結案", "error");
+      return;
     }
-
-    setTimeout(() => { if (syncStatus === 'success') setSyncStatus('idle', '☁ 雲端已同步'); }, 3000);
-  } catch (e) {
-    console.error('讀取雲端失敗:', e);
-    setSyncStatus('error', '❌ 雲端讀取失敗,使用本機資料');
+    if (needMeter && !meterId) {
+      props.showToast("請選擇抄表客戶,抄表系統才會提醒送碳粉", "error");
+      return;
+    }
+    setSaving(true);
+    var technicianValue = technicianList.join(",");
+    var promise;
+    if (isNew) {
+      promise = gsRun("addTicket", {
+        createdAt: createdAt, customerId: customerId, customerName: customerName,
+        dispatchType: dispatchType, description: description, technician: technicianValue,
+        status: status, note: note,
+        meterCustomerId: meterId, meterCustomerName: meterName
+      });
+    } else {
+      promise = gsRun("updateTicketStatus", {
+        ticketId: editing.ticketId, status: status, technician: technicianValue,
+        dispatchType: dispatchType, description: description, note: note,
+        meterCustomerId: meterId, meterCustomerName: meterName,
+        parts: cart.map(function (c) { return { model: c.model, name: c.name, qty: c.qty }; })
+      });
+    }
+    promise.then(function () {
+      setSaving(false);
+      props.showToast(isNew ? "叫修單已建立" : "已儲存", "success");
+      props.onSaved();
+    }).catch(function (err) {
+      setSaving(false);
+      if (!isNew) setStatus(editing.status); // 結案被擋下來時,狀態退回原本的值
+      props.showToast(err.message || "儲存失敗", "error");
+    });
   }
+
+  return h("div", null,
+    h("div", { className: "back-row" }, h("button", { className: "back-btn", onClick: props.onCancel }, "← 返回列表")),
+    h("div", { className: "page-title" }, isNew ? "新增叫修" : "叫修單 #" + editing.ticketId),
+
+    h("label", { className: "field-label" }, "工單編號"),
+    h("div", { className: "input", style: { background: "var(--page-plane)", color: "var(--muted)" } }, isNew ? "儲存後自動產生" : "#" + editing.ticketId),
+
+    h("label", { className: "field-label" }, "叫修時間"),
+    h("input", { className: "input", type: "datetime-local", value: createdAt, onChange: function (e) { setCreatedAt(e.target.value); }, disabled: !isNew }),
+
+    h("label", { className: "field-label" }, "客戶名稱"),
+    isNew
+      ? h("div", { className: "part-picker" },
+          h("input", {
+            className: "input", placeholder: "輸入客戶名稱搜尋",
+            value: customerName ? customerName : customerQuery,
+            onFocus: function () { setShowCustPicker(true); setCustomerName(""); },
+            onChange: function (e) { setCustomerQuery(e.target.value); setShowCustPicker(true); }
+          }),
+          showCustPicker && custMatches.length > 0
+            ? h("div", { className: "suggest-list" },
+                custMatches.map(function (c) {
+                  return h("div", {
+                    key: c.customerId, className: "suggest-item",
+                    onClick: function () {
+                      setCustomerId(c.customerId); setCustomerName(c.name); setCustomerQuery(""); setShowCustPicker(false);
+                    }
+                  },
+                    h("div", { className: "suggest-model" }, c.name),
+                    h("div", { className: "suggest-name" }, c.address || c.phone || "")
+                  );
+                })
+              )
+            : (showCustPicker && customerQuery ? h("div", { className: "suggest-empty" }, "找不到符合的客戶") : null)
+        )
+      : h("div", { className: "input", style: { background: "var(--page-plane)", color: "var(--muted)" } }, customerName),
+
+    h("label", { className: "field-label" }, "派工類別"),
+    h(ToggleRow, { options: props.dispatchTypes, value: dispatchType, onChange: setDispatchType }),
+
+    h("label", { className: "field-label" }, "詳細說明"),
+    h("textarea", { className: "input", rows: 3, value: description, onChange: function (e) { setDescription(e.target.value); } }),
+
+    showParts ? h(React.Fragment, null,
+      h("label", { className: "field-label" }, "更換零件(結案時會從庫存扣掉)"),
+      editing && editing.stockDeducted ? h("div", { className: "field-hint-sm" }, "這張單結案時已經扣過庫存。在這裡改零件,庫存會自動更正;改回未完成或刪除單子,扣掉的會還回去") : null,
+      !props.inventoryLinked ? h("div", { className: "inv-warn" }, "尚未串接零件庫存系統,無法即時檢查庫存(去 Settings 工作表填 InventorySpreadsheetId)") : null,
+      h("div", { className: "part-picker" },
+        h("input", {
+          className: "input", placeholder: "輸入型號或品名搜尋零件",
+          value: partQuery, onChange: function (e) { setPartQuery(e.target.value); }
+        }),
+        partQuery && partMatches.length > 0
+          ? h("div", { className: "suggest-list" },
+              partMatches.map(function (p) {
+                return h("div", { key: p.model, className: "suggest-item", onClick: function () { addPart(p); } },
+                  h("div", { className: "suggest-model" }, p.model + "　" + p.name),
+                  h("div", { className: "suggest-stock" }, "目前庫存 " + p.stock)
+                );
+              })
+            )
+          : (partQuery ? h("div", { className: "suggest-empty" }, "找不到符合的零件") : null)
+      ),
+      cart.length === 0 ? h("div", { className: "part-cart-empty" }, "尚未選擇零件") :
+        h("div", { className: "cart" },
+          h("div", { className: "cart-title" }, "本次更換零件"),
+          cart.map(function (c) {
+            var info = props.parts.filter(function (p) { return p.model === c.model; })[0];
+            var stock = info ? info.stock : null;
+            return h("div", { key: c.model, className: "cart-item" },
+              h("div", { className: "cart-item-head" },
+                h("div", null,
+                  h("div", { className: "cart-item-model" }, c.model + " " + c.name),
+                  h("div", { className: "cart-item-sub" }, stock === null ? "庫存資料中查無此型號" : "目前庫存 " + stock + (c.qty > stock ? "　⚠️ 數量不足" : ""))
+                ),
+                h("button", { className: "btn-del", onClick: function () { removePart(c.model); } }, "移除")
+              ),
+              h("div", { className: "qty-stepper", style: { marginTop: "10px" } },
+                h("button", { className: "qty-btn", onClick: function () { changeQty(c.model, c.qty - 1); } }, "−"),
+                h("input", { className: "qty-number", value: c.qty, onChange: function (e) { changeQty(c.model, e.target.value); } }),
+                h("button", { className: "qty-btn", onClick: function () { changeQty(c.model, c.qty + 1); } }, "+")
+              )
+            );
+          })
+        )
+    ) : null,
+
+    h("label", { className: "field-label" }, "指派技術員"),
+    h(MultiToggleRow, { options: techOptions, value: technicianList, onChange: setTechnicianList }),
+
+    h("label", { className: "field-label" }, "處理狀態"),
+    h(ToggleRow, { options: statusOptions, value: status, onChange: setStatus }),
+    status === "已完成" ? h("div", { className: "field-hint-sm" }, "選「已完成」送出時,系統會檢查上面零件的庫存是否足夠,不夠的話會擋下來並提醒你") : null,
+
+    needMeter ? h(React.Fragment, null,
+      h("label", { className: "field-label" }, "抄表客戶"),
+      meterSelected
+        ? h("div", { className: "meter-picked" },
+            h("div", { style: { minWidth: 0 } },
+              h("div", { className: "meter-picked-name" }, meterSelected.name),
+              h("div", { className: "meter-picked-sub" }, [meterSelected.id, meterSelected.dist, meterSelected.owner].filter(Boolean).join("　"))
+            ),
+            h("button", { type: "button", className: "meter-change", onClick: function () { setMeterId(""); setMeterName(""); setMeterQuery(""); } }, "更換")
+          )
+        : h("div", null,
+            h("div", { className: "part-picker" },
+              h("input", {
+                className: "input", placeholder: "輸入抄表系統的客戶名稱或服務編號",
+                value: meterQuery, onChange: function (e) { setMeterQuery(e.target.value); }
+              }),
+              meterQuery
+                ? (meterTyped.length > 0
+                    ? h("div", { className: "suggest-list" },
+                        meterTyped.map(function (m) {
+                          return h("div", { key: m.id, className: "suggest-item", onClick: function () { pickMeter(m); } },
+                            h("div", { className: "suggest-model" }, m.name),
+                            h("div", { className: "suggest-name" }, [m.id, m.dist, m.owner].filter(Boolean).join("　"))
+                          );
+                        })
+                      )
+                    : h("div", { className: "suggest-empty" }, "抄表系統裡找不到這個客戶"))
+                : null
+            ),
+            meterGuess.length > 0 ? h(React.Fragment, null,
+              h("div", { className: "field-hint-sm" }, "可能是這幾家,點一下就選好:"),
+              h("div", { className: "toggle-row" },
+                meterGuess.map(function (m) {
+                  return h("button", { key: m.id, type: "button", className: "toggle-btn", onClick: function () { pickMeter(m); } }, m.name);
+                })
+              )
+            ) : null
+          ),
+      h("div", { className: "field-hint-sm" }, "選好之後,抄表系統首頁會提醒這家要順便送碳粉")
+    ) : null,
+    wantsToner && !needMeter ? h("div", { className: "inv-warn" },
+      props.meterLinked
+        ? "讀不到抄表系統的客戶清單,這張單不會出現在抄表系統的提醒"
+        : "還沒串接抄表系統,這張單不會出現在抄表系統的提醒(執行一次 setupSheets 就會自動設定)"
+    ) : null,
+
+    !isNew && editing.completedAt ? h(React.Fragment, null,
+      h("label", { className: "field-label" }, "完工時間"),
+      h("div", { className: "input", style: { background: "var(--page-plane)", color: "var(--muted)" } }, fmtDateTime(editing.completedAt))
+    ) : null,
+
+    showPhotos ? h(React.Fragment, null,
+      h("label", { className: "field-label" }, "現場/效果圖片"),
+      h("div", { className: "photo-grid" },
+        photos.map(function (p) {
+          return h("div", { key: p.fileId, className: "photo-thumb" },
+            h("a", { href: "https://drive.google.com/file/d/" + encodeURIComponent(p.fileId) + "/view", target: "_blank", rel: "noopener" },
+              h("img", { src: "https://drive.google.com/thumbnail?id=" + encodeURIComponent(p.fileId) + "&sz=w600", alt: p.name })),
+            h("button", { type: "button", className: "photo-remove", onClick: function () { removePhoto(p.fileId); } }, "✕")
+          );
+        }),
+        h("label", { className: "photo-add-btn" },
+          uploading ? "上傳中…" : "＋ 新增照片",
+          h("input", { type: "file", accept: "image/*", capture: "environment", multiple: true, style: { display: "none" }, onChange: handlePhotoSelect, disabled: uploading })
+        )
+      ),
+      h("div", { className: "field-hint-sm" }, "客戶提供的效果圖、故障現場照片都可以放這裡,結案時比較好對照")
+    ) : null,
+
+    h("label", { className: "field-label" }, "維修內容"),
+    h("textarea", { className: "input", rows: 2, value: note, onChange: function (e) { setNote(e.target.value); } }),
+    status === "已完成" && dispatchType === "故障叫修" ? h("div", { className: "field-hint-sm" }, "故障叫修選「已完成」時這欄不能空白(補碳粉、送貨不用填)") : null,
+
+    h("button", { className: "btn btn-primary btn-block", disabled: saving, onClick: save }, saving ? "儲存中…" : "Save"),
+
+    !isNew ? h("div", { style: { marginTop: "26px", borderTop: "1px solid var(--gridline)", paddingTop: "16px" } },
+      !showDeleteConfirm
+        ? h("button", { className: "btn-link", style: { color: "var(--critical)" }, onClick: function () { setShowDeleteConfirm(true); } }, "刪除這張叫修單")
+        : h("div", null,
+            h("div", { className: "field-hint-sm" }, "KEY 錯要刪除嗎?輸入密碼確認(去 Settings 分頁的 DeletePassword 設定)"),
+            h("input", { className: "input", type: "password", placeholder: "刪除密碼", value: deletePassword, onChange: function (e) { setDeletePassword(e.target.value); }, style: { marginTop: "8px" } }),
+            h("div", { style: { display: "flex", gap: "10px", marginTop: "10px" } },
+              h("button", { className: "btn", style: { flex: 1 }, onClick: function () { setShowDeleteConfirm(false); setDeletePassword(""); } }, "取消"),
+              h("button", { className: "btn-del-yes", style: { flex: 1, padding: "12px" }, disabled: deleting, onClick: doDeleteTicket }, deleting ? "刪除中…" : "確認刪除")
+            )
+          )
+    ) : null
+  );
 }
 
-async function manualSync() {
-  showToast('開始同步...');
-  await loadFromCloud();
-  updateAll();
-}
-
-window.addEventListener('online', () => {
-  showToast('🌐 網路已連線');
-  if (pendingSync) syncToCloud();
-});
-
-window.addEventListener('offline', () => {
-  setSyncStatus('offline', '⚠ 離線中,資料先存本機');
-  showToast('📵 離線中');
-});
-
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && pendingSync && navigator.onLine) syncToCloud();
-});
-
-// ============================================
-// UI & 資料處理邏輯 (保持不變)
-// ============================================
-function fmt(n) { return Number(n || 0).toLocaleString('zh-TW'); }
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-function inCurrentMonth(dateStr) {
-  const [y, m] = dateStr.split('-').map(Number);
-  return y === currentYear && m === currentMonth;
-}
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2000);
-}
-function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-
-function changeMonth(delta) {
-  currentMonth += delta;
-  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
-  if (currentMonth < 1) { currentMonth = 12; currentYear--; }
-  updateAll();
-}
-function updateMonthDisplay() { document.getElementById('monthDisplay').textContent = `${currentYear} 年 ${currentMonth} 月`; }
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'chart') setTimeout(renderCharts, 50);
-}
-
-function addIncome() {
-  const date = document.getElementById('incomeDate').value;
-  const amount = parseFloat(document.getElementById('incomeAmount').value);
-  const note = document.getElementById('incomeNote').value.trim();
-  if (!date || !amount || amount <= 0) { showToast('請完整填寫'); return; }
-  data.income.push({ id: genId(), date, amount, note });
-  scheduleSync();
-  document.getElementById('incomeAmount').value = '';
-  document.getElementById('incomeNote').value = '';
-  updateAll();
-}
-function deleteIncome(id) {
-  if (!confirm('確定刪除?')) return;
-  data.income = data.income.filter(x => x.id !== id);
-  scheduleSync();
-  updateAll();
-}
-
-function selectCategory(cat) {
-  currentCategory = cat;
-  document.querySelectorAll('.cat-option').forEach(el => el.classList.toggle('active', el.dataset.cat === cat));
-  document.getElementById('quickTagsArea').style.display = cat === 'food' ? 'flex' : 'none';
-}
-function addCost() {
-  const date = document.getElementById('costDate').value;
-  const item = document.getElementById('costItem').value.trim();
-  const amount = parseFloat(document.getElementById('costAmount').value);
-  const note = document.getElementById('costNote').value.trim();
-  if (!date || !item || !amount || amount <= 0) { showToast('請完整填寫'); return; }
-  data.cost.push({ id: genId(), date, item, amount, note, category: currentCategory });
-  scheduleSync();
-  document.getElementById('costItem').value = '';
-  document.getElementById('costAmount').value = '';
-  document.getElementById('costNote').value = '';
-  updateAll();
-}
-function deleteCost(id) {
-  if (!confirm('確定刪除?')) return;
-  data.cost = data.cost.filter(x => x.id !== id);
-  scheduleSync();
-  updateAll();
-}
-
-function fillFromTag(name, amount) {
-  document.getElementById('costItem').value = name;
-  if (amount) document.getElementById('costAmount').value = amount;
-  document.getElementById('costAmount').focus();
-}
-function addTag() {
-  const name = document.getElementById('newTagName').value.trim();
-  const amount = parseFloat(document.getElementById('newTagAmount').value) || null;
-  if (!name) return;
-  data.tags.push({ name, amount });
-  scheduleSync();
-  document.getElementById('newTagName').value = '';
-  document.getElementById('newTagAmount').value = '';
-  renderTags();
-}
-function removeTag(name) {
-  data.tags = data.tags.filter(t => t.name !== name);
-  scheduleSync();
-  renderTags();
-}
-
-function renderTags() {
-  const quick = document.getElementById('quickTagsArea');
-  quick.innerHTML = data.tags.map(t => `<span class="quick-tag" onclick="fillFromTag('${t.name}', ${t.amount})">${t.name}</span>`).join('');
-  const settings = document.getElementById('settingsTagsArea');
-  settings.innerHTML = data.tags.map(t => `<span class="quick-tag">${t.name}<span class="remove" onclick="removeTag('${t.name}')">✕</span></span>`).join('');
-}
-
-function renderIncomeTable() {
-  const tbody = document.getElementById('incomeTable');
-  const list = data.income.filter(x => inCurrentMonth(x.date)).sort((a,b) => b.date.localeCompare(a.date));
-  tbody.innerHTML = list.map(x => `<tr><td>${x.date}</td><td class="amount in">$${fmt(x.amount)}</td><td>${x.note}</td><td><button class="btn-delete" onclick="deleteIncome('${x.id}')">刪除</button></td></tr>`).join('');
-}
-function renderCostTable() {
-  const tbody = document.getElementById('costTable');
-  const filter = document.getElementById('filterCategory').value;
-  let list = data.cost.filter(x => inCurrentMonth(x.date));
-  if (filter !== 'all') list = list.filter(x => (x.category || 'food') === filter);
-  tbody.innerHTML = list.sort((a,b) => b.date.localeCompare(a.date)).map(x => {
-    const cat = CATEGORIES[x.category || 'food'];
-    return `<tr><td>${x.date}</td><td><span class="cat-badge ${cat.color}">${cat.emoji} ${cat.name}</span></td><td><strong>${x.item}</strong></td><td class="amount out">$${fmt(x.amount)}</td><td>${x.note}</td><td><button class="btn-delete" onclick="deleteCost('${x.id}')">刪除</button></td></tr>`;
-  }).join('');
-}
-function renderCatSummary() {
-  const costList = data.cost.filter(x => inCurrentMonth(x.date));
-  const totals = { food: 0, utility: 0, rent: 0, equip: 0, misc: 0 };
-  costList.forEach(x => { totals[x.category || 'food'] += Number(x.amount); });
-  document.getElementById('catSummary').innerHTML = Object.keys(CATEGORIES).map(key => `
-    <div style="border:1.5px solid var(--ink-medium); border-radius:4px; padding:12px; background:var(--bg-cream);">
-      <div style="font-size:12px; color:var(--ink-medium);">${CATEGORIES[key].emoji} ${CATEGORIES[key].name}</div>
-      <div style="font-weight:700; font-size:20px; color:var(--red-stamp);">$${fmt(totals[key])}</div>
-    </div>`).join('');
-}
-function updateSummary() {
-  const incomeList = data.income.filter(x => inCurrentMonth(x.date));
-  const costList = data.cost.filter(x => inCurrentMonth(x.date));
-  const totalIncome = incomeList.reduce((s, x) => s + Number(x.amount), 0);
-  const totalCost = costList.reduce((s, x) => s + Number(x.amount), 0);
-  document.getElementById('totalIncome').textContent = fmt(totalIncome);
-  document.getElementById('totalCost').textContent = fmt(totalCost);
-  document.getElementById('netProfit').textContent = fmt(totalIncome - totalCost);
-  document.getElementById('incomeDays').textContent = `— ${new Set(incomeList.map(x => x.date)).size} 天營業 —`;
-  document.getElementById('costCount').textContent = `— ${costList.length} 筆支出 —`;
-}
-
-function renderCharts() {
-  const labels = [], incomeData = [], costData = [];
-  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    labels.push(d + '日');
-    incomeData.push(data.income.filter(x => x.date === dateStr).reduce((s,x) => s+Number(x.amount), 0));
-    costData.push(data.cost.filter(x => x.date === dateStr).reduce((s,x) => s+Number(x.amount), 0));
-  }
-  if (dailyChartInstance) dailyChartInstance.destroy();
-  dailyChartInstance = new Chart(document.getElementById('dailyChart').getContext('2d'), {
-    type: 'bar',
-    data: { labels, datasets: [{ label: '營收', data: incomeData, backgroundColor: '#A67C2D' }, { label: '支出', data: costData, backgroundColor: '#C8362C' }] },
-    options: { responsive: true, maintainAspectRatio: false }
+/* ============================================================
+ * 客戶清單頁 + 客戶詳細頁
+ * ============================================================ */
+function CustomerListPage(props) {
+  var _q = React.useState(""), q = _q[0], setQ = _q[1];
+  var filtered = props.customers.filter(function (c) {
+    if (!q) return true;
+    var hay = (c.name + " " + c.contact + " " + c.phone + " " + c.address).toLowerCase();
+    return hay.indexOf(q.toLowerCase()) !== -1;
   });
+  return h("div", null,
+    h("div", { className: "page-title" }, "客戶清單"),
+    h("input", { className: "input search-box", placeholder: "搜尋公司名稱／聯絡人／電話／地址", value: q, onChange: function (e) { setQ(e.target.value); } }),
+    h("button", { className: "btn-link", onClick: props.onAdd }, "＋ 新增客戶"),
+    filtered.length === 0 ? h("div", { className: "empty-hint" }, "沒有符合的客戶") :
+      filtered.map(function (c) {
+        return h("div", { key: c.customerId, className: "customer-row", onClick: function () { props.onOpen(c); } },
+          h("div", null,
+            h("div", { className: "customer-row-name" }, c.name),
+            h("div", { className: "customer-row-sub" }, (c.contact ? c.contact + "　" : "") + (c.phone || ""))
+          ),
+          h("span", { style: { color: "var(--muted)" } }, "›")
+        );
+      })
+  );
 }
 
-function exportData() {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `炒飯記帳備份_${todayStr()}.json`;
-  a.click();
+function DetailRow(props) {
+  return h("div", { className: "detail-row" },
+    h("div", { className: "detail-label" }, props.label),
+    h("div", { className: "detail-value" }, props.children)
+  );
 }
-function exportCSV() {
-  let csv = '\uFEFF【本月營收】\n日期,營業額,備註\n';
-  data.income.filter(x => inCurrentMonth(x.date)).forEach(x => csv += `${x.date},${x.amount},${x.note}\n`);
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `炒飯記帳_${currentYear}年${currentMonth}月.csv`;
-  a.click();
+
+function CustomerDetailPage(props) {
+  var c = props.customer;
+  var mapUrl = c.address ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(c.address) : "";
+  return h("div", null,
+    h("div", { className: "back-row" }, h("button", { className: "back-btn", onClick: props.onBack }, "← 返回客戶清單")),
+    h("div", { className: "page-title" }, "客戶資料"),
+    h("div", { className: "detail-card" },
+      h(DetailRow, { label: "公司名稱" }, c.name),
+      h(DetailRow, { label: "客戶編號" }, c.customerId),
+      h(DetailRow, { label: "聯絡人" }, c.contact || "（未填）"),
+      h(DetailRow, { label: "聯絡電話" }, c.phone || "（未填）"),
+      h(DetailRow, { label: "公司地址" },
+        h("span", null, c.address || "（未填）"),
+        c.address ? h("a", { className: "detail-map-icon", href: mapUrl, target: "_blank", rel: "noopener" }, "📍") : null
+      ),
+      h(DetailRow, { label: "設備機型" }, c.machineModel || "（未填）")
+    ),
+    h("button", { className: "btn btn-block", style: { marginTop: "16px" }, onClick: function () { props.onEdit(c); } }, "編輯客戶資料")
+  );
 }
-function importData(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
+
+function CustomerFormModal(props) {
+  var c = props.customer || {};
+  var _name = React.useState(c.name || ""), name = _name[0], setName = _name[1];
+  var _contact = React.useState(c.contact || ""), contact = _contact[0], setContact = _contact[1];
+  var _phone = React.useState(c.phone || ""), phone = _phone[0], setPhone = _phone[1];
+  var _address = React.useState(c.address || ""), address = _address[0], setAddress = _address[1];
+  var _machineModel = React.useState(c.machineModel || ""), machineModel = _machineModel[0], setMachineModel = _machineModel[1];
+  var _saving = React.useState(false), saving = _saving[0], setSaving = _saving[1];
+
+  function save() {
+    if (!name) { props.showToast("請填公司名稱", "error"); return; }
+    setSaving(true);
+    var body = { name: name, contact: contact, phone: phone, address: address, machineModel: machineModel };
+    var promise = c.customerId ? gsRun("updateCustomer", Object.assign({ customerId: c.customerId }, body)) : gsRun("addCustomer", body);
+    promise.then(function () {
+      setSaving(false);
+      props.showToast("已儲存", "success");
+      props.onSaved();
+    }).catch(function (err) {
+      setSaving(false);
+      props.showToast(err.message || "儲存失敗", "error");
+    });
+  }
+
+  return h("div", { className: "modal-backdrop", onClick: props.onClose },
+    h("div", { className: "modal", onClick: function (e) { e.stopPropagation(); } },
+      h("div", { className: "modal-header" },
+        h("div", { className: "modal-title" }, c.customerId ? "編輯客戶" : "新增客戶"),
+        h("button", { className: "icon-btn", onClick: props.onClose }, "✕")
+      ),
+      h("div", { className: "modal-body" },
+        h("label", { className: "field-label" }, "公司名稱"),
+        h("input", { className: "input", value: name, onChange: function (e) { setName(e.target.value); } }),
+        h("label", { className: "field-label" }, "聯絡人"),
+        h("input", { className: "input", value: contact, onChange: function (e) { setContact(e.target.value); } }),
+        h("label", { className: "field-label" }, "聯絡電話"),
+        h("input", { className: "input", value: phone, onChange: function (e) { setPhone(e.target.value); } }),
+        h("label", { className: "field-label" }, "公司地址"),
+        h("input", { className: "input", value: address, onChange: function (e) { setAddress(e.target.value); } }),
+        h("label", { className: "field-label" }, "設備機型"),
+        h("input", { className: "input", value: machineModel, onChange: function (e) { setMachineModel(e.target.value); } }),
+        h("button", { className: "btn btn-primary btn-block", disabled: saving, onClick: save }, saving ? "儲存中…" : "Save")
+      )
+    )
+  );
+}
+
+/* ============================================================
+ * 統計報表頁:查某個月每位客人叫修幾次
+ * ============================================================ */
+function currentMonthValue_() {
+  var d = new Date();
+  return d.getFullYear() + "-" + pad2_(d.getMonth() + 1);
+}
+
+function ReportsPage(props) {
+  var _month = React.useState(currentMonthValue_()), month = _month[0], setMonth = _month[1];
+
+  var inMonth = props.tickets.filter(function (t) { return String(t.createdAt || "").slice(0, 7) === month; });
+  var counts = {};
+  inMonth.forEach(function (t) {
+    var name = t.customerName || "(未填客戶)";
+    counts[name] = (counts[name] || 0) + 1;
+  });
+  var rows = Object.keys(counts).map(function (name) { return { name: name, count: counts[name] }; })
+    .sort(function (a, b) { return b.count - a.count || a.name.localeCompare(b.name); });
+
+  return h("div", null,
+    h("div", { className: "page-title" }, "統計報表"),
+    h("label", { className: "field-label" }, "選擇月份"),
+    h("input", { className: "input", type: "month", value: month, onChange: function (e) { setMonth(e.target.value); } }),
+    h("div", { className: "stat-tiles" },
+      h("div", { className: "stat-tile" },
+        h("div", { className: "stat-tile-label" }, "這個月叫修單數"),
+        h("div", { className: "stat-tile-value" }, inMonth.length)
+      ),
+      h("div", { className: "stat-tile" },
+        h("div", { className: "stat-tile-label" }, "有叫修的客戶數"),
+        h("div", { className: "stat-tile-value" }, rows.length)
+      )
+    ),
+    h("div", { className: "section-title" }, "各客戶叫修次數(高到低)"),
+    rows.length === 0 ? h("div", { className: "empty-hint" }, "這個月還沒有叫修紀錄") :
+      rows.map(function (r) {
+        return h("div", { key: r.name, className: "stock-row" },
+          h("div", null, h("div", { className: "stock-row-model" }, r.name)),
+          h("div", { className: "stock-row-qty" }, r.count + " 次")
+        );
+      })
+  );
+}
+
+/* ============================================================
+ * 主 App
+ * ============================================================ */
+function LoginPage(props) {
+  var _pw = React.useState(""), pw = _pw[0], setPw = _pw[1];
+  function submit() {
+    var v = String(pw || "").trim();
+    if (!v) return;
+    props.onLogin(v);
+  }
+  return h("div", { className: "center-screen" },
+    h("div", { style: { width: "100%", maxWidth: "320px", textAlign: "left" } },
+      h("div", { className: "page-title", style: { textAlign: "center" } }, "叫修系統"),
+      props.message ? h("div", { className: "warn-hint", style: { marginBottom: "10px" } }, props.message) : null,
+      h("label", { className: "field-label" }, "存取密碼"),
+      h("input", {
+        className: "input", type: "password", autoFocus: true, placeholder: "請輸入存取密碼",
+        value: pw, onChange: function (e) { setPw(e.target.value); },
+        onKeyDown: function (e) { if (e.key === "Enter") submit(); }
+      }),
+      h("button", { className: "btn btn-primary btn-block", onClick: submit }, "進入"),
+      h("div", { className: "field-hint-sm", style: { textAlign: "center", marginTop: "10px" } }, "輸入一次之後,這台裝置會記住")
+    )
+  );
+}
+
+function App() {
+  var _loading = React.useState(true), loading = _loading[0], setLoading = _loading[1];
+  var _needLogin = React.useState(needsLogin_), needLogin = _needLogin[0], setNeedLogin = _needLogin[1];
+  var _loginMsg = React.useState(""), loginMsg = _loginMsg[0], setLoginMsg = _loginMsg[1];
+  var _fresh = React.useState(false), fresh = _fresh[0], setFresh = _fresh[1];
+  var _data = React.useState(null), data = _data[0], setData = _data[1];
+  var _tab = React.useState("tickets"), tab = _tab[0], setTab = _tab[1]; // tickets | customers
+  var _page = React.useState("list"), page = _page[0], setPage = _page[1]; // list | form | detail
+  var _activeTicket = React.useState(null), activeTicket = _activeTicket[0], setActiveTicket = _activeTicket[1];
+  var _activeCustomer = React.useState(null), activeCustomer = _activeCustomer[0], setActiveCustomer = _activeCustomer[1];
+  var _showCustForm = React.useState(false), showCustForm = _showCustForm[0], setShowCustForm = _showCustForm[1];
+  var _editingCustomer = React.useState(null), editingCustomer = _editingCustomer[0], setEditingCustomer = _editingCustomer[1];
+  var _toast = React.useState(null), toast = _toast[0], setToast = _toast[1];
+  var _err = React.useState(""), err = _err[0], setErr = _err[1];
+
+  function showToast(message, type) {
+    setToast({ message: message, type: type || "success" });
+    setTimeout(function () { setToast(null); }, 3000);
+  }
+
+  // useCache 只在剛開啟網頁那一次用:先秀上次的資料讓畫面馬上出來,同時在背景抓最新的換上去
+  function reload(useCache) {
+    var cached = (useCache === true && !inAppsScript_()) ? readCache_() : null;
+    if (cached) { setData(cached); setLoading(false); } else { setLoading(true); }
+    gsRun("getBootstrap").then(function (d) {
+      setData(d);
+      setLoading(false);
+      setFresh(true);
+      if (!inAppsScript_()) writeCache_(d);
+    }).catch(function (e) {
+      if (e && e.code === "AUTH") {
+        // 密碼錯誤或被改掉了:清掉記住的密碼跟快取,回到登入畫面
+        setPw_("");
+        clearCache_();
+        setData(null);
+        setLoginMsg(e.message || "密碼錯誤");
+        setNeedLogin(true);
+        setLoading(false);
+        return;
+      }
+      if (cached) {
+        showToast("更新失敗,目前顯示的是上次的資料:" + (e.message || ""), "warning");
+        return;
+      }
+      setErr(e.message || "載入失敗");
+      setLoading(false);
+    });
+  }
+
+  function doLogin(pw) {
+    setPw_(pw);
+    setLoginMsg("");
+    setNeedLogin(false);
+    reload();
+  }
+  function doLogout() {
+    setPw_("");
+    clearCache_();
+    setData(null);
+    setLoginMsg("");
+    setNeedLogin(true);
+  }
+
+  React.useEffect(function () { if (!needsLogin_()) reload(true); }, []);
+
+  // Email 裡的連結會帶 ?ticket=xxx。
+  // 在 Apps Script 裡用 google.script.url.getLocation 讀網址參數;放在 GitHub 等外部網站時直接讀 location.search。
+  // 資料載入後如果有這個值,就直接跳到那張單的編輯畫面,不用自己再去列表找
+  var _initTicketId = React.useState(""), initTicketId = _initTicketId[0], setInitTicketId = _initTicketId[1];
+  React.useEffect(function () {
     try {
-      const imported = JSON.parse(ev.target.result);
-      if (imported.income) data.income = imported.income;
-      if (imported.cost) data.cost = imported.cost;
-      scheduleSync();
-      updateAll();
-      showToast('匯入成功');
-    } catch (err) { showToast('格式錯誤'); }
-  };
-  reader.readAsText(file);
+      if (inAppsScript_()) {
+        if (google.script.url && google.script.url.getLocation) {
+          google.script.url.getLocation(function (location) {
+            var id = location && location.parameter && location.parameter.ticket;
+            if (id) setInitTicketId(String(id));
+          });
+        }
+      } else {
+        var id2 = new URLSearchParams(window.location.search).get("ticket");
+        if (id2) setInitTicketId(String(id2));
+      }
+    } catch (e) { /* 讀不到網址參數就算了,不影響正常使用 */ }
+  }, []);
+
+  // 要等到抓到最新資料(fresh)才跳轉,避免用到舊快取裡還沒有的新單或舊內容;找到之後才算完成
+  var deepLinkDone = React.useRef(false);
+  React.useEffect(function () {
+    if (!data || !initTicketId || !fresh || deepLinkDone.current) return;
+    var found = data.tickets.filter(function (t) { return String(t.ticketId) === String(initTicketId); })[0];
+    if (found) {
+      deepLinkDone.current = true;
+      setTab("tickets");
+      setActiveTicket(found);
+      setPage("form");
+    }
+  }, [data, initTicketId, fresh]);
+
+  if (needLogin) {
+    return h(LoginPage, { message: loginMsg, onLogin: doLogin });
+  }
+  if (err) {
+    return h("div", { className: "center-screen" },
+      h("div", { className: "error-box" },
+        h("div", null, "無法載入系統"),
+        h("div", { style: { fontSize: "13px", color: "var(--muted)" } }, err),
+        h("button", { className: "btn", onClick: function () { setErr(""); reload(); } }, "重新整理")
+      )
+    );
+  }
+  if (loading || !data) {
+    return h("div", { className: "center-screen" }, "載入中…");
+  }
+
+  function openTicket(t) { setActiveTicket(t); setPage("form"); }
+  function openNewTicket() { setActiveTicket(null); setPage("form"); }
+  function backToTicketList() { setPage("list"); reload(); }
+
+  function openCustomer(c) { setActiveCustomer(c); setPage("detail"); }
+  function backToCustomerList() { setPage("list"); setActiveCustomer(null); reload(); }
+
+  var content;
+  if (tab === "tickets") {
+    content = page === "form"
+      ? h(TicketFormPage, {
+          ticket: activeTicket, dispatchTypes: data.dispatchTypes, statusList: data.statusList,
+          customers: data.customers, technicians: data.technicians, parts: data.parts,
+          inventoryLinked: data.inventoryLinked, showToast: showToast,
+          meterCustomers: data.meterCustomers || [], meterLinked: !!data.meterLinked,
+          onSaved: backToTicketList, onCancel: function () { setPage("list"); }
+        })
+      : h(TicketListPage, { tickets: data.tickets, statusList: data.statusList, onOpen: openTicket, onNew: openNewTicket });
+  } else if (tab === "reports") {
+    content = h(ReportsPage, { tickets: data.tickets });
+  } else {
+    content = page === "detail" && activeCustomer
+      ? h(CustomerDetailPage, { customer: activeCustomer, onBack: backToCustomerList, onEdit: function (c) { setEditingCustomer(c); setShowCustForm(true); } })
+      : h(CustomerListPage, {
+          customers: data.customers, onOpen: openCustomer,
+          onAdd: function () { setEditingCustomer(null); setShowCustForm(true); }
+        });
+  }
+
+  return h("div", { className: "app-shell" },
+    h("div", { className: "top-bar" },
+      h("div", { className: "top-bar-title" }, "叫修系統"),
+      !inAppsScript_() ? h("button", { className: "btn-ghost", onClick: doLogout }, "登出") : null
+    ),
+    h("div", { className: "tab-bar" },
+      h("button", { className: "tab-btn" + (tab === "tickets" ? " active" : ""), onClick: function () { setTab("tickets"); setPage("list"); } }, "叫修列表"),
+      h("button", { className: "tab-btn" + (tab === "reports" ? " active" : ""), onClick: function () { setTab("reports"); setPage("list"); } }, "統計報表"),
+      h("button", { className: "tab-btn" + (tab === "customers" ? " active" : ""), onClick: function () { setTab("customers"); setPage("list"); setActiveCustomer(null); } }, "客戶清單")
+    ),
+    h("div", { className: "main-content" }, content),
+    showCustForm ? h(CustomerFormModal, {
+      customer: editingCustomer, showToast: showToast,
+      onClose: function () { setShowCustForm(false); },
+      onSaved: function () { setShowCustForm(false); reload(); }
+    }) : null,
+    h(Toast, { toast: toast })
+  );
 }
 
-function updateAll() {
-  updateMonthDisplay();
-  updateSummary();
-  renderIncomeTable();
-  renderCostTable();
-  renderCatSummary();
-  renderTags();
-  if (document.getElementById('tab-chart').classList.contains('active')) renderCharts();
-}
-
-async function initApp() {
-  document.getElementById('incomeDate').value = todayStr();
-  document.getElementById('costDate').value = todayStr();
-  loadLocal();
-  updateAll();
-  loadFromCloud().then(() => updateAll());
-}
-initApp();
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
 </script>
 </body>
 </html>
