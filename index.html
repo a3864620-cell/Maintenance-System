@@ -615,11 +615,13 @@ function TicketFormPage(props) {
   var _saving = React.useState(false), saving = _saving[0], setSaving = _saving[1];
   var _photos = React.useState(editing && editing.photos ? editing.photos.slice() : []), photos = _photos[0], setPhotos = _photos[1];
   var _uploading = React.useState(false), uploading = _uploading[0], setUploading = _uploading[1];
+  // 新增叫修單時先選好的照片(還沒有工單編號,先放在手機上,單子存好後在背景自動上傳)
+  var _newPhotos = React.useState([]), newPhotos = _newPhotos[0], setNewPhotos = _newPhotos[1];
   var _showDeleteConfirm = React.useState(false), showDeleteConfirm = _showDeleteConfirm[0], setShowDeleteConfirm = _showDeleteConfirm[1];
   var _deletePassword = React.useState(""), deletePassword = _deletePassword[0], setDeletePassword = _deletePassword[1];
   var _deleting = React.useState(false), deleting = _deleting[0], setDeleting = _deleting[1];
 
-  var showPhotos = !isNew && (dispatchType === "故障叫修" || dispatchType === "送貨");
+  var showPhotos = dispatchType === "故障叫修" || dispatchType === "送貨";
   // 只有故障叫修會從叫修單扣庫存;補碳粉、送貨的東西是在庫存系統領料時就扣掉了
   var showParts = dispatchType === "故障叫修";
   // 零件要等處理狀態選「已完成」才出現:結案時才選實際換了什麼,避免開單時先選一次、結案又選一次變成重複
@@ -706,6 +708,22 @@ function TicketFormPage(props) {
   function handlePhotoSelect(e) {
     var files = Array.prototype.slice.call(e.target.files || []);
     e.target.value = "";
+    if (isNew) {
+      if (!files.length) return;
+      setUploading(true);
+      Promise.all(files.map(function (file) {
+        return compressImage(file).then(function (dataUrl) {
+          return { localId: String(Date.now()) + Math.random(), dataUrl: dataUrl, name: file.name };
+        });
+      })).then(function (list) {
+        setNewPhotos(function (prev) { return prev.concat(list); });
+        setUploading(false);
+      }).catch(function (err) {
+        setUploading(false);
+        props.showToast(err.message || "讀取照片失敗", "error");
+      });
+      return;
+    }
     files.forEach(function (file) {
       setUploading(true);
       compressImage(file).then(function (dataUrl) {
@@ -757,7 +775,7 @@ function TicketFormPage(props) {
         dispatchType: dispatchType, description: description, technician: technicianValue,
         status: status, note: note,
         meterCustomerId: meterId, meterCustomerName: meterName
-      }, !!andNext);
+      }, !!andNext, showPhotos ? newPhotos : []);
       return;
     }
     setSaving(true);
@@ -928,7 +946,15 @@ function TicketFormPage(props) {
     showPhotos ? h(React.Fragment, null,
       h("label", { className: "field-label" }, "現場/效果圖片"),
       h("div", { className: "photo-grid" },
-        photos.map(function (p) {
+        isNew ? newPhotos.map(function (p) {
+          return h("div", { key: p.localId, className: "photo-thumb" },
+            h("img", { src: p.dataUrl, alt: p.name }),
+            h("button", { type: "button", className: "photo-remove", onClick: function () {
+              setNewPhotos(function (prev) { return prev.filter(function (x) { return x.localId !== p.localId; }); });
+            } }, "✕")
+          );
+        }) : null,
+        isNew ? null : photos.map(function (p) {
           return h("div", { key: p.fileId, className: "photo-thumb" },
             h("a", { href: "https://drive.google.com/file/d/" + encodeURIComponent(p.fileId) + "/view", target: "_blank", rel: "noopener" },
               h("img", { src: "https://drive.google.com/thumbnail?id=" + encodeURIComponent(p.fileId) + "&sz=w600", alt: p.name })),
@@ -936,11 +962,13 @@ function TicketFormPage(props) {
           );
         }),
         h("label", { className: "photo-add-btn" },
-          uploading ? "上傳中…" : "＋ 新增照片",
+          uploading ? (isNew ? "處理中…" : "上傳中…") : "＋ 新增照片",
           h("input", { type: "file", accept: "image/*", capture: "environment", multiple: true, style: { display: "none" }, onChange: handlePhotoSelect, disabled: uploading })
         )
       ),
-      h("div", { className: "field-hint-sm" }, "客戶提供的效果圖、故障現場照片都可以放這裡,結案時比較好對照")
+      h("div", { className: "field-hint-sm" }, isNew
+        ? "客戶提供的效果圖、故障現場照片都可以放這裡。按 Save 後會跟著單子在背景自動上傳"
+        : "客戶提供的效果圖、故障現場照片都可以放這裡,結案時比較好對照")
     ) : null,
 
     h("label", { className: "field-label" }, "維修內容"),
@@ -1152,15 +1180,17 @@ function App() {
   var pendSeq = React.useRef(0);
   var reloadSeq = React.useRef(0);
   var refreshTimer = React.useRef(null);
+  var photoChain = React.useRef(Promise.resolve());
+  var _photoJobs = React.useState(0), photoJobs = _photoJobs[0], setPhotoJobs = _photoJobs[1]; // 背景上傳中的照片張數
 
   // 還有單子在背景送出時關掉網頁,先跳提醒,避免單子沒存到
   React.useEffect(function () {
-    var busy = pendingNew.some(function (p) { return p.state === "saving"; });
+    var busy = photoJobs > 0 || pendingNew.some(function (p) { return p.state === "saving"; });
     if (!busy) return;
     function warn(e) { e.preventDefault(); e.returnValue = ""; return ""; }
     window.addEventListener("beforeunload", warn);
     return function () { window.removeEventListener("beforeunload", warn); };
-  }, [pendingNew]);
+  }, [pendingNew, photoJobs]);
   var _page = React.useState("list"), page = _page[0], setPage = _page[1]; // list | form | detail
   var _activeTicket = React.useState(null), activeTicket = _activeTicket[0], setActiveTicket = _activeTicket[1];
   var _activeCustomer = React.useState(null), activeCustomer = _activeCustomer[0], setActiveCustomer = _activeCustomer[1];
@@ -1318,7 +1348,8 @@ function App() {
         };
         upsertTicket(saved);
         setPendingNew(function (list) { return list.filter(function (x) { return x.localId !== item.localId; }); });
-        showToast("#" + res.ticketId + " " + p.customerName + " 已建立", "success");
+        showToast("#" + res.ticketId + " " + p.customerName + " 已建立" + (item.photos.length ? ",照片上傳中…" : ""), "success");
+        if (item.photos.length) uploadPhotosLater(String(res.ticketId), item.photos);
         scheduleRefresh();
       }, function (err) {
         setPendingNew(function (list) {
@@ -1345,12 +1376,38 @@ function App() {
     refreshTimer.current = setTimeout(function () { reload(); }, 1500);
   }
 
+  // 新單的照片:單子建好之後才有編號,這時才一張一張上傳(另外排隊,不會卡住下一張單的建立)
+  function uploadPhotosLater(ticketId, list) {
+    setPhotoJobs(function (n) { return n + list.length; });
+    var failed = 0;
+    list.forEach(function (ph) {
+      photoChain.current = photoChain.current.then(function () {
+        return gsRun("uploadTicketPhoto", { ticketId: ticketId, dataUrl: ph.dataUrl, fileName: ph.name }).then(function (all) {
+          setData(function (prev) {
+            if (!prev) return prev;
+            var next = Object.assign({}, prev, { tickets: prev.tickets.map(function (t) {
+              return String(t.ticketId) === ticketId ? Object.assign({}, t, { photos: all }) : t;
+            }) });
+            writeCache_(next);
+            return next;
+          });
+        }, function () { failed += 1; }).then(function () {
+          setPhotoJobs(function (n) { return n - 1; });
+        });
+      });
+    });
+    photoChain.current = photoChain.current.then(function () {
+      if (failed) showToast("#" + ticketId + " 有 " + failed + " 張照片沒上傳成功,請打開這張單再補傳", "error");
+      else showToast("#" + ticketId + " 照片已上傳(" + list.length + " 張)", "success");
+    });
+  }
+
   function discardPending(item) {
     setPendingNew(function (list) { return list.filter(function (p) { return p.localId !== item.localId; }); });
   }
-  function submitNewTicket(payload, andNext) {
+  function submitNewTicket(payload, andNext, photos) {
     pendSeq.current += 1;
-    var item = { localId: pendSeq.current, payload: payload, state: "saving", error: "" };
+    var item = { localId: pendSeq.current, payload: payload, photos: photos || [], state: "saving", error: "" };
     setPendingNew(function (list) { return list.concat([item]); });
     runPending(item);
     if (andNext) {
