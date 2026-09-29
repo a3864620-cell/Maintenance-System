@@ -4,6 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>叫修系統</title>
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<script>
+/* 放在 GitHub 等外部網站時,API 網址填這裡(Apps Script 部署後的 /exec 網址) */
+var API_URL = "https://script.google.com/macros/s/AKfycbzB-Ry74ubI9b-B3zg_uWy39OaMzKjkWGeeDC3huIC3dyMDHjwsIE9tDDi0fjYIpZSrpA/exec";
+/* 網頁一打開就先去抓資料,跟下載 React 同時進行,不用等畫面程式載完才開始抓 */
+window.__BOOT__ = (function () {
+  try {
+    if (window.google && window.google.script) return null;
+    var pw = localStorage.getItem("repair_api_password");
+    if (!pw) return null;
+    return fetch(API_URL, { method: "POST", body: JSON.stringify({ fn: "getBootstrap", args: [], password: pw }) })
+      .then(function (r) { return r.json(); });
+  } catch (e) { return null; }
+})();
+if (window.__BOOT__) window.__BOOT__.catch(function () {});
+</script>
 <style id="print-page-style"></style>
 <style>
   :root {
@@ -375,9 +393,8 @@ var h = React.createElement;
  * - 貼在 Apps Script 裡開啟:走 google.script.run,不需要密碼。
  * - 放在 GitHub Pages 等外部網站:走 fetch 呼叫 Apps Script 的 API(doPost),
  *   需要輸入 Settings 分頁 ApiPassword 那組存取密碼,輸入一次之後這台裝置會記住。
- * 只要把 API_URL 換成你部署後的 /exec 網址即可。
+ * API_URL 在最上面 <head> 裡設定,換成你部署後的 /exec 網址即可。
  * ============================================================ */
-var API_URL = "https://script.google.com/macros/s/AKfycbzB-Ry74ubI9b-B3zg_uWy39OaMzKjkWGeeDC3huIC3dyMDHjwsIE9tDDi0fjYIpZSrpA/exec";
 var PW_KEY = "repair_api_password";
 var CACHE_KEY = "repair_bootstrap_cache_v1";
 
@@ -401,6 +418,24 @@ function clearCache_() {
   try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
 }
 
+function unwrapApi_(p) {
+  return p.then(function (res) {
+    if (res && res.ok) return res.data;
+    var e = new Error((res && res.error) || "伺服器沒有回應正確的資料");
+    if (res && res.code) e.code = res.code;
+    throw e;
+  }, function () {
+    throw new Error("連不上伺服器,請檢查網路後再試一次");
+  });
+}
+
+/** 拿網頁一打開就先發出去的那個請求(只能用一次);沒有的話就正常呼叫 */
+function takeEarlyBoot_() {
+  var p = window.__BOOT__;
+  window.__BOOT__ = null;
+  return p ? unwrapApi_(p) : gsRun("getBootstrap");
+}
+
 function gsRun(fnName) {
   var args = Array.prototype.slice.call(arguments, 1);
   if (inAppsScript_()) {
@@ -412,17 +447,10 @@ function gsRun(fnName) {
     });
   }
   // 不要加 Content-Type 之類的自訂 header,瀏覽器會自動用 text/plain,這樣才不會觸發 CORS preflight 被擋
-  return fetch(API_URL, {
+  return unwrapApi_(fetch(API_URL, {
     method: "POST",
     body: JSON.stringify({ fn: fnName, args: args, password: getPw_() })
-  }).then(function (r) { return r.json(); }).then(function (res) {
-    if (res && res.ok) return res.data;
-    var e = new Error((res && res.error) || "伺服器沒有回應正確的資料");
-    if (res && res.code) e.code = res.code;
-    throw e;
-  }, function () {
-    throw new Error("連不上伺服器,請檢查網路後再試一次");
-  });
+  }).then(function (r) { return r.json(); }));
 }
 
 function txt(v) {
@@ -775,6 +803,7 @@ function TicketFormPage(props) {
       h("label", { className: "field-label" }, "更換零件(結案時會從庫存扣掉)"),
       editing && editing.stockDeducted ? h("div", { className: "field-hint-sm" }, "這張單結案時已經扣過庫存。在這裡改零件,庫存會自動更正;改回未完成或刪除單子,扣掉的會還回去") : null,
       !props.inventoryLinked ? h("div", { className: "inv-warn" }, "尚未串接零件庫存系統,無法即時檢查庫存(去 Settings 工作表填 InventorySpreadsheetId)") : null,
+      props.inventoryLinked && props.lookupsPending && !props.parts.length ? h("div", { className: "field-hint-sm" }, "零件清單載入中…") : null,
       h("div", { className: "part-picker" },
         h("input", {
           className: "input", placeholder: "輸入型號或品名搜尋零件",
@@ -1105,15 +1134,43 @@ function App() {
     setTimeout(function () { setToast(null); }, 3000);
   }
 
+  // 零件庫存 / 抄表客戶清單:伺服器快取剛好過期時,列表會先出來,這兩份在背景另外補上
+  var lookupsBusy = React.useRef(false);
+  function loadLookups() {
+    if (lookupsBusy.current) return;
+    lookupsBusy.current = true;
+    gsRun("getLookups").then(function (l) {
+      lookupsBusy.current = false;
+      setData(function (prev) {
+        if (!prev) return prev;
+        var next = Object.assign({}, prev, { parts: l.parts || [], meterCustomers: l.meterCustomers || [], lookupsPending: false });
+        writeCache_(next);
+        return next;
+      });
+    }).catch(function () {
+      lookupsBusy.current = false;
+      setData(function (prev) { return prev ? Object.assign({}, prev, { lookupsPending: false }) : prev; });
+    });
+  }
+
   // useCache 只在剛開啟網頁那一次用:先秀上次的資料讓畫面馬上出來,同時在背景抓最新的換上去
   function reload(useCache) {
-    var cached = (useCache === true && !inAppsScript_()) ? readCache_() : null;
-    if (cached) { setData(cached); setLoading(false); } else { setLoading(true); }
-    gsRun("getBootstrap").then(function (d) {
-      setData(d);
+    var cached = useCache === true ? readCache_() : null;
+    if (cached) { setData(cached); setLoading(false); } else if (!data) { setLoading(true); }
+    var req = useCache === true ? takeEarlyBoot_() : gsRun("getBootstrap");
+    req.then(function (d) {
+      setData(function (prev) {
+        var next = d;
+        // 這次伺服器沒附零件/抄表清單的話,先沿用手上舊的,等背景補上再換
+        if (d.lookupsPending && prev) {
+          next = Object.assign({}, d, { parts: prev.parts || [], meterCustomers: prev.meterCustomers || [] });
+        }
+        writeCache_(next);
+        return next;
+      });
       setLoading(false);
       setFresh(true);
-      if (!inAppsScript_()) writeCache_(d);
+      if (d.lookupsPending) loadLookups();
     }).catch(function (e) {
       if (e && e.code === "AUTH") {
         // 密碼錯誤或被改掉了:清掉記住的密碼跟快取,回到登入畫面
@@ -1212,7 +1269,7 @@ function App() {
       ? h(TicketFormPage, {
           ticket: activeTicket, dispatchTypes: data.dispatchTypes, statusList: data.statusList,
           customers: data.customers, technicians: data.technicians, parts: data.parts,
-          inventoryLinked: data.inventoryLinked, showToast: showToast,
+          inventoryLinked: data.inventoryLinked, lookupsPending: !!data.lookupsPending, showToast: showToast,
           meterCustomers: data.meterCustomers || [], meterLinked: !!data.meterLinked,
           onSaved: backToTicketList, onCancel: function () { setPage("list"); }
         })
