@@ -545,7 +545,8 @@ function TicketCard(props) {
  * 叫修列表頁
  * ============================================================ */
 function TicketListPage(props) {
-  var _f = React.useState("全部"), filter = _f[0], setFilter = _f[1];
+  // 分頁記在 App 那層:每次打開 App 預設「未處理」,點進單子再回來會停在原本的分頁
+  var filter = props.filter || props.statusList[0], setFilter = props.onFilter;
   var tabs = props.statusList.concat(["送貨", "全部"]);
   var filtered = props.tickets.filter(function (t) {
     if (filter === "全部") return true;
@@ -600,7 +601,7 @@ function TicketFormPage(props) {
   var showPhotos = !isNew && (dispatchType === "故障叫修" || dispatchType === "送貨");
   // 只有故障叫修會從叫修單扣庫存;補碳粉、送貨的東西是在庫存系統領料時就扣掉了
   var showParts = dispatchType === "故障叫修";
-  // 新增時也開放選零件:補碳粉先選好要帶哪支碳粉,技師在抄表 App 按一下結案就能正確扣庫存
+  // 零件要等處理狀態選「已完成」才出現:結案時才選實際換了什麼,避免開單時先選一次、結案又選一次變成重複
 
   // 「待下次送碳粉」要選抄表客戶,抄表系統首頁才會提醒這家要順便送碳粉
   var _meterId = React.useState(editing ? (editing.meterCustomerId || "") : ""), meterId = _meterId[0], setMeterId = _meterId[1];
@@ -799,7 +800,14 @@ function TicketFormPage(props) {
     h("label", { className: "field-label" }, "詳細說明"),
     h("textarea", { className: "input", rows: 3, value: description, onChange: function (e) { setDescription(e.target.value); } }),
 
-    showParts ? h(React.Fragment, null,
+    h("label", { className: "field-label" }, "指派技術員"),
+    h(MultiToggleRow, { options: techOptions, value: technicianList, onChange: setTechnicianList }),
+
+    h("label", { className: "field-label" }, "處理狀態"),
+    h(ToggleRow, { options: statusOptions, value: status, onChange: setStatus }),
+    status === "已完成" && showParts ? h("div", { className: "field-hint-sm" }, "在下面選這次更換的零件。送出時系統會檢查庫存是否足夠,不夠的話會擋下來並提醒你") : null,
+
+    showParts && status === "已完成" ? h(React.Fragment, null,
       h("label", { className: "field-label" }, "更換零件(結案時會從庫存扣掉)"),
       editing && editing.stockDeducted ? h("div", { className: "field-hint-sm" }, "這張單結案時已經扣過庫存。在這裡改零件,庫存會自動更正;改回未完成或刪除單子,扣掉的會還回去") : null,
       !props.inventoryLinked ? h("div", { className: "inv-warn" }, "尚未串接零件庫存系統,無法即時檢查庫存(去 Settings 工作表填 InventorySpreadsheetId)") : null,
@@ -844,12 +852,6 @@ function TicketFormPage(props) {
         )
     ) : null,
 
-    h("label", { className: "field-label" }, "指派技術員"),
-    h(MultiToggleRow, { options: techOptions, value: technicianList, onChange: setTechnicianList }),
-
-    h("label", { className: "field-label" }, "處理狀態"),
-    h(ToggleRow, { options: statusOptions, value: status, onChange: setStatus }),
-    status === "已完成" ? h("div", { className: "field-hint-sm" }, "選「已完成」送出時,系統會檢查上面零件的庫存是否足夠,不夠的話會擋下來並提醒你") : null,
 
     needMeter ? h(React.Fragment, null,
       h("label", { className: "field-label" }, "抄表客戶"),
@@ -1121,6 +1123,7 @@ function App() {
   var _fresh = React.useState(false), fresh = _fresh[0], setFresh = _fresh[1];
   var _data = React.useState(null), data = _data[0], setData = _data[1];
   var _tab = React.useState("tickets"), tab = _tab[0], setTab = _tab[1]; // tickets | customers
+  var _listFilter = React.useState("未處理"), listFilter = _listFilter[0], setListFilter = _listFilter[1]; // 叫修列表目前的分頁
   var _page = React.useState("list"), page = _page[0], setPage = _page[1]; // list | form | detail
   var _activeTicket = React.useState(null), activeTicket = _activeTicket[0], setActiveTicket = _activeTicket[1];
   var _activeCustomer = React.useState(null), activeCustomer = _activeCustomer[0], setActiveCustomer = _activeCustomer[1];
@@ -1273,7 +1276,7 @@ function App() {
           meterCustomers: data.meterCustomers || [], meterLinked: !!data.meterLinked,
           onSaved: backToTicketList, onCancel: function () { setPage("list"); }
         })
-      : h(TicketListPage, { tickets: data.tickets, statusList: data.statusList, onOpen: openTicket, onNew: openNewTicket });
+      : h(TicketListPage, { tickets: data.tickets, statusList: data.statusList, filter: listFilter, onFilter: setListFilter, onOpen: openTicket, onNew: openNewTicket });
   } else if (tab === "reports") {
     content = h(ReportsPage, { tickets: data.tickets });
   } else {
