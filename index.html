@@ -10,7 +10,7 @@
 <script>
 /* 版本號:每次改完 index.html 上傳到 GitHub 前,把這個改成新的(例如日期加序號),
    手機打開時發現 GitHub 上的版本號不一樣,就會出現「點這裡更新」 */
-var APP_VERSION = "2026-09-29.4";
+var APP_VERSION = "2026-10-06.1";
 /* 放在 GitHub 等外部網站時,API 網址填這裡(Apps Script 部署後的 /exec 網址) */
 var API_URL = "https://script.google.com/macros/s/AKfycbzB-Ry74ubI9b-B3zg_uWy39OaMzKjkWGeeDC3huIC3dyMDHjwsIE9tDDi0fjYIpZSrpA/exec";
 /* 網頁一打開就先去抓資料,跟下載 React 同時進行,不用等畫面程式載完才開始抓 */
@@ -385,7 +385,9 @@ if (window.__BOOT__) window.__BOOT__.catch(function () {});
   .photo-thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; border: 1px solid var(--gridline); background: var(--page-plane); }
   .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .photo-remove { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: none; background: rgba(11,11,11,0.6); color: #fff; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-  .photo-add-btn { aspect-ratio: 1; border-radius: 10px; border: 1px dashed var(--gridline); background: var(--surface-1); color: var(--text-secondary); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; padding: 6px; }
+  .photo-add-btn { aspect-ratio: 1; border-radius: 10px; border: 1px dashed var(--gridline); background: var(--surface-1); color: var(--text-secondary); font-size: 13px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; cursor: pointer; padding: 6px; -webkit-tap-highlight-color: transparent; }
+  .photo-add-btn:active { background: var(--page-plane); }
+  .photo-add-ico { font-size: 20px; line-height: 1; }
 
   .meter-picked { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--accent); background: #eaf1fb; }
   .meter-picked-name { font-weight: 700; font-size: 15px; color: var(--accent-dark); }
@@ -1012,8 +1014,16 @@ function TicketFormPage(props) {
           );
         }),
         h("label", { className: "photo-add-btn" },
-          uploading ? (isNew ? "處理中…" : "上傳中…") : "＋ 新增照片",
-          h("input", { type: "file", accept: "image/*", capture: "environment", multiple: true, style: { display: "none" }, onChange: handlePhotoSelect, disabled: uploading })
+          uploading ? (isNew ? "處理中…" : "上傳中…")
+            : h(React.Fragment, null, h("span", { className: "photo-add-ico" }, "📷"), h("span", null, "拍照")),
+          // 這顆要有 capture,手機才會直接開相機
+          h("input", { type: "file", accept: "image/*", capture: "environment", style: { display: "none" }, onChange: handlePhotoSelect, disabled: uploading })
+        ),
+        h("label", { className: "photo-add-btn" },
+          uploading ? (isNew ? "處理中…" : "上傳中…")
+            : h(React.Fragment, null, h("span", { className: "photo-add-ico" }, "🖼"), h("span", null, "選照片")),
+          // 這顆絕對不能加 capture,加了手機就只會跳相機,不給你挑相簿裡的照片
+          h("input", { type: "file", accept: "image/*", multiple: true, style: { display: "none" }, onChange: handlePhotoSelect, disabled: uploading })
         )
       ),
       h("div", { className: "field-hint-sm" }, isNew
